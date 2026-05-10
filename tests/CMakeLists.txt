@@ -10,10 +10,12 @@ add_executable(test_caustic
     test_color.cpp
     test_indexer.cpp
     test_preset_io.cpp
+    test_svg_renderer.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
     caustic::core
+    caustic::render-svg
     doctest::doctest
 )
 

@@ -20,6 +20,7 @@
 #include <caustic/style.hpp>
 
 #include "raylib_renderer.hpp"
+#include "svg_renderer.hpp"
 
 #include <imgui.h>
 #include <raylib.h>
@@ -45,7 +46,10 @@ struct AppState {
     caustic::Preset preset;
 
     char save_name_buf[64] = "untitled";
-    std::string status_message;     // shown briefly after save/load
+    char export_name_buf[64] = "export";
+    bool export_plotter_mode = false;
+    int export_size = 1024;
+    std::string status_message;     // shown briefly after save/load/export
     std::vector<fs::path> bundled_presets;
     std::vector<fs::path> user_presets;
 
@@ -54,6 +58,10 @@ struct AppState {
     bool any_active_two_frames_ago = false;
     bool last_render_was_coarse = false;
 };
+
+fs::path user_export_dir() {
+    return caustic::user_preset_dir().parent_path() / "exports";
+}
 
 // ---------------------------------------------------------------------------
 // Geometry + Style construction
@@ -236,6 +244,8 @@ void render_param_panel(AppState& state) {
     }
 
     ImGui::Separator();
+    ImGui::TextDisabled("Ctrl+click any slider to type an exact value (or right-click → Input)");
+    ImGui::TextDisabled("scroll wheel on slider: ± step   Shift: ×10   Ctrl: ×0.1");
     ImGui::TextDisabled("keys 1–4: switch generator   F or 0: reset camera   F11: fullscreen");
     ImGui::TextDisabled("middle drag: pan   scroll on canvas: zoom");
 
@@ -297,6 +307,9 @@ void render_style_panel(AppState& state) {
 
     if (color_edit_double("background", &s.background)) state.dirty = true;
     if (ImGui::Checkbox("cyclic (closed-curve continuity)", &s.cyclic)) state.dirty = true;
+
+    ImGui::Separator();
+    ImGui::TextDisabled("click any color square for hex/RGB/HSV input");
 
     ImGui::End();
 }
@@ -360,6 +373,31 @@ void render_preset_panel(AppState& state) {
     render_list("User", state.user_presets);
 
     if (ImGui::Button("Refresh")) refresh_preset_lists(state);
+
+    ImGui::Separator();
+    ImGui::Text("Export SVG (to %s)", user_export_dir().string().c_str());
+    ImGui::PushItemWidth(180);
+    ImGui::InputText("filename", state.export_name_buf, sizeof(state.export_name_buf));
+    ImGui::PopItemWidth();
+    ImGui::SliderInt("size", &state.export_size, 256, 4096);
+    ImGui::Checkbox("plotter mode (single colour, no opacity, sorted)", &state.export_plotter_mode);
+    if (ImGui::Button("Export SVG")) {
+        try {
+            const fs::path path = user_export_dir() / (std::string(state.export_name_buf) + ".svg");
+            caustic::SvgOptions opts;
+            opts.width = static_cast<double>(state.export_size);
+            opts.height = static_cast<double>(state.export_size);
+            opts.plotter_mode = state.export_plotter_mode;
+            // Export always runs at full quality — see ARCHITECTURE.md §5.4.
+            caustic::write_svg(path,
+                               build_geometry(state.preset.generator, /*coarse=*/false),
+                               build_style(state.preset.style),
+                               opts);
+            state.status_message = "exported " + path.filename().string();
+        } catch (const std::exception& e) {
+            state.status_message = std::string("export failed: ") + e.what();
+        }
+    }
 
     ImGui::End();
 }

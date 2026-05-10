@@ -8,6 +8,7 @@ target_include_directories(caustic PRIVATE ${rlimgui_SOURCE_DIR})
 target_link_libraries(caustic PRIVATE
     caustic::core
     caustic::render-raylib
+    caustic::render-svg
     raylib
     imgui
 )
