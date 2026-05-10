@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "cardioid_epi",
+  "generator": {
+    "type": "epitrochoid",
+    "params": { "R": 1.0, "r": 1.0, "d": 1.0, "samples": 4000 }
+  },
+  "style": {
+    "color_map": {
+      "type": "hsv_sweep",
+      "hue_start": 200.0,
+      "hue_end": 320.0,
+      "saturation": 0.7,
+      "value": 0.95
+    },
+    "color_indexer": "by_curve_t",
+    "stroke": {
+      "width_min": 1.5,
+      "width_max": 1.5,
+      "width_indexer": "by_chord_index",
+      "opacity": 0.85
+    },
+    "background": "#0a0a14",
+    "cyclic": true
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}

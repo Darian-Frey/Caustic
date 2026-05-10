@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "cardioid_classic",
+  "generator": {
+    "type": "modular_chord",
+    "params": { "N": 200, "k": 2.0 }
+  },
+  "style": {
+    "color_map": {
+      "type": "linear_gradient",
+      "start": "#1a4480",
+      "end": "#f0c050"
+    },
+    "color_indexer": "by_chord_length",
+    "stroke": {
+      "width_min": 0.6,
+      "width_max": 0.6,
+      "width_indexer": "by_chord_index",
+      "opacity": 0.6
+    },
+    "background": "#0a0a0a",
+    "cyclic": false
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}

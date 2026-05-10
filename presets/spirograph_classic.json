@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "spirograph_classic",
+  "generator": {
+    "type": "hypotrochoid",
+    "params": { "R": 5.0, "r": 3.0, "d": 2.0, "samples": 4000 }
+  },
+  "style": {
+    "color_map": {
+      "type": "linear_gradient",
+      "start": "#1a4480",
+      "end": "#f0c050"
+    },
+    "color_indexer": "by_curve_t",
+    "stroke": {
+      "width_min": 1.0,
+      "width_max": 2.0,
+      "width_indexer": "by_chord_length",
+      "opacity": 0.9
+    },
+    "background": "#0a0a0a",
+    "cyclic": true
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}
