@@ -90,19 +90,20 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 5 — Preset system
+## Phase 5 — Preset system *(complete, 2026-05-10)*
 
 **Goal:** Save and recall configurations.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] JSON serialise / deserialise of full app state (generator + style + camera)
-- [ ] Save / Load buttons in File menu
-- [ ] Preset browser panel showing bundled presets with thumbnails (or names if PngRenderer not yet implemented)
-- [ ] User preset directory at `~/.config/caustic/presets/` (XDG on Linux)
-- [ ] At least 5 bundled presets in `presets/` covering each generator
+- [x] JSON serialise / deserialise of full app state via `caustic::Preset` + `nlohmann/json` (`core/include/caustic/preset.hpp` + `preset_io.hpp`)
+- [x] Save input + Save button + per-preset Load Selectables in a dedicated Presets panel
+- [x] Preset browser panel listing bundled and user presets as names (PngRenderer thumbnails deferred — out of v1 per ARCHITECTURE.md §5.3)
+- [x] User preset directory at `$XDG_CONFIG_HOME/caustic/presets` (falls back to `$HOME/.config/caustic/presets`)
+- [x] Five bundled presets in `presets/` covering all four generators: `cardioid_classic`, `times_tables_51`, `spirograph_classic`, `cardioid_epi`, `bowtie`
+- [x] Out-of-spec polish: fullscreen via F11 (`ToggleBorderlessWindowed`) and resizable window; renderer reallocates its `RenderTexture2D` canvas on resize so native resolution is used at every window size
 
-**Acceptance:** Save a preset, restart the app, load it — visual output is identical. Preset JSON is human-readable and matches SPEC.md schema.
+**Acceptance:** Save a preset to the user dir, restart the app, click it in the Presets panel — visual output identical. Bundled JSON files are human-readable and match the schema in SPEC.md §3. 54 doctest cases passing (12 new: hex round-trip, enum string maps, every colormap variant, version rejection, on-disk save/load, XDG path, bundled-preset smoke parse).
 
 ---
 

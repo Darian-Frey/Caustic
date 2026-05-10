@@ -220,14 +220,20 @@ Authoritative format. Version field is mandatory; readers must reject unknown ma
       "width_indexer": "by_chord_index | by_chord_length | by_angle | by_curve_t",
       "opacity": 0.6
     },
-    "background": "#0a0a0a"
+    "background": "#0a0a0a",
+    "cyclic": false
   },
   "camera": {
-    "centre": [0.0, 0.0],
+    "pan_x_px": 0.0,
+    "pan_y_px": 0.0,
     "zoom": 1.0
   }
 }
 ```
+
+The `cyclic` flag (default `false`) triangle-wave-remaps `t` through `1 - |2t - 1|` before colormap and stroke-width lookup. For closed curves (trochoids, Lissajous) this makes the colormap and width return to their starting value at `t=1`, hiding the seam where the curve loops back. Modular chord and other discrete primitives leave it off.
+
+The camera's `pan_x_px` / `pan_y_px` are in **screen pixels** (added on top of the renderer's fit-to-content baseline; positive y is down, matching screen convention). `zoom` is a multiplier on the fit scale. Storing pan in pixels means presets are not strictly portable across canvas sizes — load on a different canvas size and the figure's framing will differ. World-coordinate pan is a future cleanup if cross-canvas portability becomes a goal.
 
 ### 3.1 Color map types
 
@@ -294,10 +300,12 @@ A reader MUST:
       "width_indexer": "by_chord_index",
       "opacity": 0.6
     },
-    "background": "#0a0a0a"
+    "background": "#0a0a0a",
+    "cyclic": false
   },
   "camera": {
-    "centre": [0.0, 0.0],
+    "pan_x_px": 0.0,
+    "pan_y_px": 0.0,
     "zoom": 1.0
   }
 }

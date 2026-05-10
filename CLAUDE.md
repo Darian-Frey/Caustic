@@ -6,15 +6,17 @@ Caustic is a C++20 desktop studio for generative geometric art — chord pattern
 
 ## Current state
 
-**Phases 0–4 complete (2026-05-10); Phase 5 next.** All four v1 generators implemented; `GeometryBuffer`, dirty-flag rendering, full style system (colormaps, indexers, stroke modulation, cyclic remap for closed curves), and the rlImGui UI are all live. App now drives everything from `AppState`: generator combo, per-generator parameter sliders with scroll-wheel ±step / Shift×10 / Ctrl×0.1, coarse drag-time preview tier, full style panel, and camera (middle-click pan, cursor-relative scroll-zoom, F/0 reset). Build green, 42 doctest cases passing.
+**Phases 0–5 complete (2026-05-10); Phase 6 next.** All four v1 generators, full style system (colormaps, indexers, stroke modulation, cyclic remap), and the rlImGui UI are live. App drives everything from `AppState` wrapping a `caustic::Preset`: generator combo, per-generator parameter sliders with scroll-wheel ±step / Shift×10 / Ctrl×0.1, coarse drag-time preview, full style panel, camera (middle-click pan, cursor-relative scroll-zoom, F/0 reset, F11 borderless fullscreen). Preset save/load via `nlohmann/json` works to `$XDG_CONFIG_HOME/caustic/presets`; five bundled presets in `presets/`. Window is resizable and the renderer's offscreen canvas reallocates to match. Build green, 54 doctest cases passing.
 
 Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui `Raylib_6_0`, Dear ImGui v1.92.7, nlohmann/json v3.11.3, doctest v2.4.11. rlImGui's `Raylib_*` tags name the matching raylib release — bump in lockstep.
 
 **Phase 4 deviation worth remembering:** R/r and a/b sliders are integer-only. The architecture's "drag through irrational a/b to watch Lissajous precess" demo is unavailable until someone adds a sample-over-many-revolutions mode + toggle. d, A, B, φ stay continuous (they don't affect closure).
 
+**Phase 5 deviation worth remembering:** `Preset.camera` stores pan as screen pixels (`pan_x_px`, `pan_y_px`) + zoom. SPEC.md previously documented `centre + zoom` (world coords); SPEC has been updated to match the implementation. Trade-off: not strictly portable across canvas sizes — load on a different window size and the figure's framing will shift. World-coord pan is a future cleanup.
+
 ## Active task
 
-**Phase 5 — Preset system.** See ROADMAP.md for deliverables. JSON serialise/deserialise of full app state (generator + params + style + camera) using `nlohmann/json`; Save / Load buttons in File menu; preset browser panel; XDG user directory at `~/.config/caustic/presets/`; at least 5 bundled presets in `presets/`. Schema is authoritative in [SPEC.md §3](SPEC.md). Acceptance: save a preset, restart, load it — visual output identical; preset JSON is human-readable.
+**Phase 6 — SVG export.** See ROADMAP.md for deliverables. Implement `SvgRenderer` parallel to `RaylibRenderer`, consuming the same `GeometryBuffer`. Output verified in Inkscape (correct viewBox, layers, colours, opacities). Plotter mode toggle (single colour, no opacity, sorted by start point). Optional Douglas–Peucker simplification pass. Determinism test: same preset → byte-identical SVG. Per architecture invariant §1, `render/svg_renderer.{hpp,cpp}` must build without raylib so the CLI (Phase 7) can link it cleanly.
 
 ## Invariants
 
