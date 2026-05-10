@@ -1,0 +1,48 @@
+{
+  "version": 2,
+  "name": "superformula_starfish",
+  "scene": {
+    "background": "#0a0a14",
+    "layers": [
+      {
+        "name": "starfish",
+        "generator": {
+          "type": "superformula",
+          "params": {
+            "m": 5.0,
+            "n1": 2.0,
+            "n2": 7.0,
+            "n3": 7.0,
+            "a": 1.0,
+            "b": 1.0,
+            "samples": 4000
+          }
+        },
+        "style": {
+          "color_map": {
+            "type": "linear_gradient",
+            "start": "#f08c33",
+            "end": "#33b3d9"
+          },
+          "color_indexer": "by_curve_t",
+          "stroke": {
+            "width_min": 1.5,
+            "width_max": 1.5,
+            "width_indexer": "by_chord_index",
+            "opacity": 0.95
+          },
+          "cyclic": true
+        },
+        "transform": {
+          "translate": [0.0, 0.0],
+          "rotate_rad": 0.0,
+          "scale": 1.0,
+          "mirror_x": false,
+          "mirror_y": false
+        },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}

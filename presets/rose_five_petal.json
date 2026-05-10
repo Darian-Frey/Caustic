@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "name": "rose_five_petal",
+  "scene": {
+    "background": "#0a0a0a",
+    "layers": [
+      {
+        "name": "5-petal rose",
+        "generator": {
+          "type": "rose",
+          "params": { "n": 5, "d": 1, "samples": 4000 }
+        },
+        "style": {
+          "color_map": {
+            "type": "hsv_sweep",
+            "hue_start": 280.0,
+            "hue_end": 360.0,
+            "saturation": 0.85,
+            "value": 0.95
+          },
+          "color_indexer": "by_curve_t",
+          "stroke": {
+            "width_min": 1.0,
+            "width_max": 2.0,
+            "width_indexer": "by_curve_t",
+            "opacity": 0.9
+          },
+          "cyclic": true
+        },
+        "transform": {
+          "translate": [0.0, 0.0],
+          "rotate_rad": 0.0,
+          "scale": 1.0,
+          "mirror_x": false,
+          "mirror_y": false
+        },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}

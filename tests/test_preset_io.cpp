@@ -234,5 +234,5 @@ TEST_CASE("bundled preset files parse cleanly") {
         CHECK_FALSE(p.scene.layers.empty());
         parsed++;
     }
-    CHECK(parsed >= 5);
+    CHECK(parsed >= 8);  // 5 v1 generators + 3 v1.1 (rose, superformula, phyllotaxis)
 }

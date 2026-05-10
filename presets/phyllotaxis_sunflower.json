@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "name": "phyllotaxis_sunflower",
+  "scene": {
+    "background": "#08080c",
+    "layers": [
+      {
+        "name": "sunflower spirals",
+        "generator": {
+          "type": "phyllotaxis",
+          "params": {
+            "N": 500,
+            "alpha": 2.39996322972865332,
+            "k": 2.0
+          }
+        },
+        "style": {
+          "color_map": {
+            "type": "hsv_sweep",
+            "hue_start": 0.0,
+            "hue_end": 360.0,
+            "saturation": 0.7,
+            "value": 0.95
+          },
+          "color_indexer": "by_chord_index",
+          "stroke": {
+            "width_min": 0.6,
+            "width_max": 0.6,
+            "width_indexer": "by_chord_index",
+            "opacity": 0.65
+          },
+          "cyclic": false
+        },
+        "transform": {
+          "translate": [0.0, 0.0],
+          "rotate_rad": 0.0,
+          "scale": 1.0,
+          "mirror_x": false,
+          "mirror_y": false
+        },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}
