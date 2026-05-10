@@ -233,6 +233,16 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
+## Nice-to-have polish backlog *(no committed timing)*
+
+Smaller polish items that improve the editing experience without warranting their own phase. Pick off as time allows.
+
+- **Curated stable-point preset libraries per generator.** Each generator (modular chord, hypotrochoid, epitrochoid, Lissajous, rose, superformula, phyllotaxis, plus future linear-envelope / polygon / strange attractors) has a parameter space dominated by chaotic-looking values with a few "stable" aesthetic islands. Phyllotaxis is the most visible case (drag α off the golden angle and the visual reads as broken), but every generator has analogous sweet spots that a new user has to stumble onto. Bundle 5–10 named presets per generator covering the canonical patterns plus a few well-chosen variants — e.g. cardioid / nephroid / Mathologer-51 for modular chord; classic Spirograph / Tusi-couple / astroid for hypotrochoid; sunflower / pine-cone / 5-spoke / dandelion for phyllotaxis. Snap-buttons in the UI (already added for phyllotaxis α and k) handle the urgent ergonomic case; the curated gallery teaches the parameter space implicitly.
+- Snap-button rows under the most chaotic sliders for the other generators if and when they prove to need them (Lissajous φ, superformula `m`, modular chord `k` integer special cases).
+- Stable-region indicator on continuous sliders — compute a "packing quality" metric over parameter space and draw a marker bar under the slider showing where local maxima live. Would auto-surface stable points without curation. Tried and rejected for now as over-engineered relative to snap buttons + curated presets.
+
+---
+
 ## Beyond v1.1 *(future, no commitment)*
 
 These are noted to keep the door open. None are scoped or scheduled.
