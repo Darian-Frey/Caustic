@@ -51,6 +51,7 @@ caustic/
 - [ROADMAP.md](ROADMAP.md) — phased build plan with acceptance criteria
 - [BUILD.md](BUILD.md) — environment, toolchain, dependencies, troubleshooting
 - [CHANGELOG.md](CHANGELOG.md) — version history
+- [BUGS.md](BUGS.md) — debugging journal: symptom-first log of bugs and their fixes
 - [CLAUDE.md](CLAUDE.md) — handoff document for AI-assisted development sessions
 
 ## License
