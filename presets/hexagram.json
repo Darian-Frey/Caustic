@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "name": "hexagram",
+  "scene": {
+    "background": "#0a0a14",
+    "layers": [
+      {
+        "name": "hexagram envelope",
+        "generator": {
+          "type": "polygon_chord",
+          "params": {
+            "n_sides": 6,
+            "N": 240,
+            "k": 2.0,
+            "rotation_rad": 0.0
+          }
+        },
+        "style": {
+          "color_map": {
+            "type": "linear_gradient",
+            "start": "#33b3d9",
+            "end": "#f0c050"
+          },
+          "color_indexer": "by_chord_length",
+          "stroke": {
+            "width_min": 0.6,
+            "width_max": 0.6,
+            "width_indexer": "by_chord_index",
+            "opacity": 0.7
+          },
+          "cyclic": false
+        },
+        "transform": {
+          "translate": [0.0, 0.0],
+          "rotate_rad": 0.0,
+          "scale": 1.0,
+          "mirror_x": false,
+          "mirror_y": false
+        },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}
