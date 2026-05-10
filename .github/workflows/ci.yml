@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  full-build:
+    name: Full build (app + cli + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies (raylib transitives)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake git ninja-build \
+            libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libasound2-dev pkg-config
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test (unit + CLI smoke)
+        run: ctest --test-dir build --output-on-failure
+
+  headless-build:
+    # Verifies the architectural invariant: cli + render-svg build without raylib.
+    name: Headless build (CAUSTIC_BUILD_APP=OFF)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install minimal dependencies (no X11/GL)
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake git ninja-build pkg-config
+
+      - name: Configure
+        run: cmake -B build-headless -G Ninja -DCMAKE_BUILD_TYPE=Release -DCAUSTIC_BUILD_APP=OFF
+
+      - name: Build
+        run: cmake --build build-headless -j
+
+      - name: Test (unit + CLI smoke)
+        run: ctest --test-dir build-headless --output-on-failure
+
+      - name: Verify raylib was not fetched/built
+        # The render/CMakeLists.txt only adds caustic-render-raylib + raylib
+        # when CAUSTIC_BUILD_APP=ON. If the headless build pulled raylib in,
+        # invariant §1 is broken.
+        run: |
+          if find build-headless -name "libraylib*" -print -quit | grep -q .; then
+            echo "FAIL: raylib was built despite CAUSTIC_BUILD_APP=OFF" >&2
+            exit 1
+          fi
+          echo "OK: no raylib artifacts in headless build tree"
+
+      - name: Render every bundled preset to SVG
+        # ROADMAP Phase 7 acceptance: batch-render all bundled presets in
+        # under 30 seconds. In practice it's well under a second locally.
+        run: |
+          mkdir -p out
+          for preset in presets/*.json; do
+            name=$(basename "$preset" .json)
+            ./build-headless/cli/caustic-cli "$preset" -o "out/${name}.svg"
+            test -s "out/${name}.svg"
+          done
+          ls -la out/
+
+      - name: Upload SVG artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundled-preset-svgs
+          path: out/*.svg
+          if-no-files-found: error

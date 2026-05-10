@@ -3,21 +3,17 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
-#include <memory>
 #include <numbers>
 #include <string>
 #include <vector>
 
 #include <caustic/colormap.hpp>
-#include <caustic/generators/epitrochoid.hpp>
-#include <caustic/generators/hypotrochoid.hpp>
-#include <caustic/generators/lissajous.hpp>
-#include <caustic/generators/modular_chord.hpp>
 #include <caustic/geometry_buffer.hpp>
+#include <caustic/geometry_factory.hpp>
 #include <caustic/preset.hpp>
 #include <caustic/preset_io.hpp>
-#include <caustic/sampler.hpp>
 #include <caustic/style.hpp>
+#include <caustic/style_factory.hpp>
 
 #include "raylib_renderer.hpp"
 #include "svg_renderer.hpp"
@@ -61,62 +57,6 @@ struct AppState {
 
 fs::path user_export_dir() {
     return caustic::user_preset_dir().parent_path() / "exports";
-}
-
-// ---------------------------------------------------------------------------
-// Geometry + Style construction
-
-caustic::GeometryBuffer build_geometry(const caustic::GeneratorSpec& g, bool coarse) {
-    caustic::GeometryBuffer geo;
-    switch (g.type) {
-        case caustic::GeneratorType::ModularChord: {
-            const int N = coarse ? std::max(3, g.chord.N / 4) : g.chord.N;
-            geo.chords = caustic::modular_chord(N, g.chord.k);
-            break;
-        }
-        case caustic::GeneratorType::Hypotrochoid: {
-            caustic::HypotrochoidCurve curve(g.hypo.R, g.hypo.r, g.hypo.d);
-            const int n = coarse ? std::max(100, g.hypo.samples / 2) : g.hypo.samples;
-            geo.polylines.push_back(caustic::sample_curve(curve, n));
-            break;
-        }
-        case caustic::GeneratorType::Epitrochoid: {
-            caustic::EpitrochoidCurve curve(g.epi.R, g.epi.r, g.epi.d);
-            const int n = coarse ? std::max(100, g.epi.samples / 2) : g.epi.samples;
-            geo.polylines.push_back(caustic::sample_curve(curve, n));
-            break;
-        }
-        case caustic::GeneratorType::Lissajous: {
-            caustic::LissajousCurve curve(g.liss.A, g.liss.B, g.liss.a, g.liss.b, g.liss.phi);
-            const int n = coarse ? std::max(100, g.liss.samples / 2) : g.liss.samples;
-            geo.polylines.push_back(caustic::sample_curve(curve, n));
-            break;
-        }
-    }
-    return geo;
-}
-
-caustic::Style build_style(const caustic::StyleSpec& spec) {
-    caustic::Style s;
-    switch (spec.colormap_type) {
-        case caustic::ColorMapType::Solid:
-            s.color_map = std::make_shared<caustic::Solid>(spec.solid_color);
-            break;
-        case caustic::ColorMapType::LinearGradient:
-            s.color_map = std::make_shared<caustic::LinearGradient>(spec.gradient_start, spec.gradient_end);
-            break;
-        case caustic::ColorMapType::HsvSweep:
-            s.color_map = std::make_shared<caustic::HsvSweep>(spec.hue_start, spec.hue_end, spec.hsv_saturation, spec.hsv_value);
-            break;
-        case caustic::ColorMapType::Diverging:
-            s.color_map = std::make_shared<caustic::Diverging>(spec.div_negative, spec.div_midpoint, spec.div_positive);
-            break;
-    }
-    s.color_indexer = spec.color_indexer;
-    s.stroke = {spec.stroke_width_min, spec.stroke_width_max, spec.stroke_width_indexer, spec.opacity};
-    s.background = spec.background;
-    s.cyclic = spec.cyclic;
-    return s;
 }
 
 // ---------------------------------------------------------------------------
@@ -390,8 +330,8 @@ void render_preset_panel(AppState& state) {
             opts.plotter_mode = state.export_plotter_mode;
             // Export always runs at full quality — see ARCHITECTURE.md §5.4.
             caustic::write_svg(path,
-                               build_geometry(state.preset.generator, /*coarse=*/false),
-                               build_style(state.preset.style),
+                               caustic::geometry_from_spec(state.preset.generator, /*coarse=*/false),
+                               caustic::style_from_spec(state.preset.style),
                                opts);
             state.status_message = "exported " + path.filename().string();
         } catch (const std::exception& e) {
@@ -473,8 +413,8 @@ int main() {
         const bool just_released = state.any_active_two_frames_ago && !dragging;
         if (state.dirty || (just_released && state.last_render_was_coarse)) {
             const bool coarse = dragging;
-            renderer.redraw(build_geometry(state.preset.generator, coarse),
-                            build_style(state.preset.style),
+            renderer.redraw(caustic::geometry_from_spec(state.preset.generator, coarse),
+                            caustic::style_from_spec(state.preset.style),
                             state.preset.camera);
             state.dirty = false;
             state.last_render_was_coarse = coarse;
