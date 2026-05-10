@@ -157,21 +157,29 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 9 — Parametric curve expansion + hybrid mode *(v1.1)*
+## Phase 9 — Parametric curve expansion + hybrid mode + multi-layer scenes *(v1.1)*
 
-**Goal:** New parametric generators, modular chords on arbitrary curves, multi-layer scenes.
+**Goal:** Multi-layer scene infrastructure with per-layer transforms and array tools (the load-bearing dependency for the symmetric, tiled, and radially-arrayed compositions the user's reference images keep returning to), plus four new parametric curves and the hybrid-mode generator.
 **Status:** Not started
 **Deliverables:**
 
-- [ ] `HybridGenerator(curve, N, k)` — modular chord rule applied to N samples of any `ParametricCurve`
-- [ ] `RoseCurve` generator (rational `k` parameter)
-- [ ] `MaurerRose` as a special case of hybrid mode on rose curve
+**Scene + transforms + arrays** (foundation — Stage A):
+
+- [ ] `caustic::Scene` replaces single-generator `Preset`: scene = ordered list of `Layer { GeneratorSpec, StyleSpec, LayerTransform, visible }`. Preset version bumps to 2; v1 presets auto-promote on load (wrap the existing generator+style in a single layer with identity transform).
+- [ ] `LayerTransform { translate, rotate_rad, scale, mirror_x, mirror_y }` applied to each layer's geometry after generation, before rendering.
+- [ ] Layer-management UI: list with add / remove / reorder / visibility toggle / duplicate, plus per-layer transform sliders.
+- [ ] Array tools (free functions producing derived layers): `rotational_array(layer, N, center)`, `grid_tile(layer, rows, cols, spacing)`, `mirror_reflect(layer, axis)`. Triggered from UI buttons; "Apply" instantiates N concrete layers (each independently editable afterward).
+- [ ] Both renderers (`SvgRenderer`, `RaylibRenderer`) iterate the scene's layers and apply each layer's transform; SVG emits one `<g>` per layer (Inkscape-friendly).
+
+**New curves and hybrid mode** (content — Stage B):
+
+- [ ] `RoseCurve(n, d)` — `r = cos(n·θ/d)` parametric curve
+- [ ] `MaurerRose` — special case of hybrid mode on rose curve
 - [ ] `SuperformulaCurve` (Gielis) — single 6-parameter equation generating stars, flowers, polygons, organic forms
 - [ ] `PhyllotaxisGenerator` — golden-angle point disk; `points` mode (scatter) and `chords` mode (modular rule on the disk)
-- [ ] Multi-layer scene: scene = ordered list of generators, each with own style
-- [ ] UI for adding, removing, reordering, and toggling visibility of layers
+- [ ] `HybridGenerator(curve, N, k)` — modular chord rule applied to N samples of any `ParametricCurve` (including the new ones above)
 
-**Acceptance:** A scene with a faint epitrochoid background and a Maurer rose foreground exports as a single SVG with two `<g>` layers, both correctly styled. Superformula sweeps through `m` produce smooth polygon → starfish morphs; phyllotaxis at α = 137.508° matches a sunflower seed head.
+**Acceptance:** A scene with a faint epitrochoid background and a Maurer rose foreground exports as a single SVG with two `<g>` layers, both correctly styled. Superformula sweeps through `m` produce smooth polygon → starfish morphs; phyllotaxis at α = 137.508° matches a sunflower seed head. Rotational-array of a single `LinearEnvelope` (Phase 10) at N=6 reproduces the radial star-of-bowties pattern from the reference images with one Apply click instead of six manual layer placements.
 
 ---
 

@@ -32,7 +32,7 @@ Distribution target: GitHub for source (open licence TBD), itch.io for pre-built
 
 - Animation system (parameter envelopes over time, frame export)
 - Hybrid mode: modular chords on arbitrary parametric curves
-- Multi-layer composition (multiple generators in one scene)
+- Multi-layer composition (multiple generators in one scene) with per-layer transforms (translate, rotate, scale, mirror) and array tools (rotational, grid, mirror-reflect) for symmetric / tiled compositions
 - Rose curve + Maurer rose (chord-pattern variant, fits naturally into hybrid mode)
 - Superformula (Gielis) — single 6-parameter equation, huge variety from one generator
 - Phyllotaxis — golden-angle point disk, point or chord variant
@@ -141,6 +141,10 @@ y(t) = B sin(b t)
 ```
 
 Closed iff `a/b` rational. Integer ratios give the classic oscilloscope figures (1:1 = ellipse, 1:2 = bowtie, 2:3 = trefoil-like). Phase `φ` rotates the figure through its precession family. Grid-aligned aesthetic, fundamentally different from the trochoids.
+
+**Multi-layer scenes (v1.1):** Phase 9 replaces the single-generator `Preset` with a `Scene` — an ordered list of `Layer { GeneratorSpec, StyleSpec, LayerTransform, visible }`. Each layer is generated independently, transformed by its `LayerTransform { translate, rotate_rad, scale, mirror_x, mirror_y }`, and rendered in order. Renderers iterate layers; SVG emits one `<g>` per layer. v1 presets auto-promote on load (their single generator+style becomes one layer with identity transform).
+
+Array tools (`rotational_array`, `grid_tile`, `mirror_reflect`) are free functions that take a source layer and emit N derived layers — the user clicks Apply, gets N concrete layers, and edits each afterward. This is how the symmetric / tiled / radially-arrayed string-art compositions (image references shown during planning) get authored without manually positioning every motif.
 
 **Hybrid (v1.1):** sample any `ParametricCurve` at N equispaced points, then apply the modular chord rule. Lets you draw chord patterns on roulettes, Lissajous figures, roses, polygon perimeters, or arbitrary user curves. The Maurer rose (`r = sin(n θ)` sampled at `θ = k·d°` for fixed integer `d`, lines connecting consecutive samples) drops out as a special case, as does the polygon-vertex string art (deltoid envelopes from triangles, etc.) when combined with a `PolygonCurve`.
 
@@ -460,12 +464,15 @@ Each phase is roughly one focused sitting. Every phase ends with a runnable, dem
 - Timeline UI with scrub
 - Bake-to-SVG-sequence
 
-**Phase 9 — Parametric curve expansion + hybrid mode** *(v1.1)*
-- Modular chords on arbitrary `ParametricCurve`
-- Rose curve generator + Maurer rose (chord variant)
-- Superformula (Gielis) generator
-- Phyllotaxis generator (point + chord variants)
-- Multi-layer composition (scene = list of generators)
+**Phase 9 — Parametric curve expansion + hybrid mode + multi-layer scenes** *(v1.1)*
+- `Scene` replaces single-generator `Preset` — ordered list of `Layer { GeneratorSpec, StyleSpec, LayerTransform, visible }`. Preset version bumps to 2; v1 presets auto-promote on load.
+- `LayerTransform` (translate / rotate / scale / mirror) applied to each layer's geometry pre-render.
+- Array tools (free functions): `rotational_array(layer, N, center)`, `grid_tile(layer, rows, cols, spacing)`, `mirror_reflect(layer, axis)`. UI instantiates derived layers on Apply.
+- Layer-management UI: add / remove / reorder / visibility / duplicate / transform sliders.
+- Modular chords on arbitrary `ParametricCurve` (hybrid mode).
+- Rose curve generator + Maurer rose (chord variant).
+- Superformula (Gielis) generator.
+- Phyllotaxis generator (point + chord variants).
 
 **Phase 10 — String-art expansion** *(v1.1)*
 - `PolygonCurve` (`ParametricCurve` along an n-gon perimeter)

@@ -18,15 +18,14 @@ Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui 
 
 ## Active task
 
-**v1 is functionally complete; pick the next move.** Three roughly-independent v1.1 expansion phases plus one release phase, any order:
+**Phase 9 — Multi-layer scenes + transforms + array tools + new curves + hybrid mode.** User chose Phase 9 next after seeing that the symmetric/tiled string-art images they keep returning to are blocked on multi-layer composition. ROADMAP Phase 9 was amended with per-layer transforms (translate/rotate/scale/mirror) and array tools (rotational, grid, mirror-reflect) — these turn "manually position 6 copies of a motif" into "set N=6 and click Apply".
 
-- **Phase 8** — Animation system (parameter envelopes over time, frame export)
-- **Phase 9** — Parametric curve expansion + hybrid mode (rose / Maurer rose / superformula / phyllotaxis + multi-layer composition)
-- **Phase 10** — String-art expansion (`PolygonCurve` + `LinearEnvelope` — the patterns the user flagged in image review)
-- **Phase 11** — Strange attractors (Clifford / de Jong / Tinkerbell — new iterative-orbit pipeline tier)
-- **Phase 12** — Polish & release (bundled preset gallery, GIFs, Windows cross-compile, itch.io page) — the path to public 1.0
+Implementation order (Stage A then Stage B, both within Phase 9):
 
-Phase 10 is the most user-visible feature gap (Caustic is literally named after the envelope curves these patterns produce); Phase 12 is the shortest path to a shippable 1.0 if the v1 feature set is enough. Confirm with user before starting.
+- **Stage A — Scene infrastructure** (the load-bearing piece): refactor `caustic::Preset` to `caustic::Scene` with a list of `Layer { GeneratorSpec, StyleSpec, LayerTransform, visible }`. Bump preset version to 2; auto-promote v1 presets on load. Add `LayerTransform`, array tools, layer-management UI, and renderer iteration. Migrate the 5 bundled presets.
+- **Stage B — Content**: `RoseCurve`, `MaurerRose`, `SuperformulaCurve`, `PhyllotaxisGenerator`, and `HybridGenerator(curve, N, k)` (modular chord rule on any ParametricCurve).
+
+After Phase 9, **Phase 10** (`LinearEnvelope` + `PolygonCurve`) is the natural follow-up — those are the missing generators that make the user's reference image patterns actually reachable with Stage A's array tools.
 
 ## Invariants
 
