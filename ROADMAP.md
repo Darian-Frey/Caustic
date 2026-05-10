@@ -55,18 +55,19 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 3 — Style system
+## Phase 3 — Style system *(complete, 2026-05-10)*
 
 **Goal:** Visual variety beyond the default solid white.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] `ColorMap` interface + `Solid`, `LinearGradient`, `HsvSweep`, `Diverging`
-- [ ] `ColorIndexer`: `byChordIndex`, `byChordLength`, `byAngle`, `byCurveT`
-- [ ] Stroke width modulation with the same indexer family
-- [ ] Background colour and (optional) faint grid overlay
+- [x] `ColorMap` interface + `Solid`, `LinearGradient`, `HsvSweep`, `Diverging`
+- [x] `Indexer` enum: `ChordIndex`, `ChordLength`, `Angle`, `CurveT`
+- [x] Stroke width modulation with the same indexer family
+- [x] Background colour (faint grid overlay deferred — not visually load-bearing for v1)
+- [x] `Style.cyclic` flag added (out-of-spec polish): triangle-wave-remaps t for closed curves so colormap and width return to their starting value at t=1, hiding the seam where the curve wraps. Opt-in per `Style`; defaults to off.
 
-**Acceptance:** A modular chord with `HsvSweep` indexed by chord length renders with smooth rainbow gradient; documented in a screenshot.
+**Acceptance:** Modular chord with `HsvSweep` indexed by chord length renders a smooth rainbow gradient; the three closed-curve generators (trochoids, Lissajous) render without visible color/width seams when `cyclic=true`.
 
 ---
 

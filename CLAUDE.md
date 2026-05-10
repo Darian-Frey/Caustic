@@ -6,13 +6,13 @@ Caustic is a C++20 desktop studio for generative geometric art — chord pattern
 
 ## Current state
 
-**Phases 0–2 complete (2026-05-10); Phase 3 in progress.** All four v1 generators (modular chord, hypotrochoid, epitrochoid, Lissajous) are implemented as `ParametricCurve` subclasses (modular_chord is a free function returning `ChordSet`); `GeometryBuffer` unifies polylines + chords; `RaylibRenderer` blits onto a cached `RenderTexture2D`; dirty-flag rendering loop is established; app cycles generators via keys 1–4. Build green, 26 doctest cases passing.
+**Phases 0–3 complete (2026-05-10); Phase 4 next.** All four v1 generators (modular chord, hypotrochoid, epitrochoid, Lissajous) implemented as `ParametricCurve` subclasses (modular_chord is a free function returning `ChordSet`); `GeometryBuffer` unifies polylines + chords; `RaylibRenderer` blits onto a cached `RenderTexture2D` with dirty-flag gating; app cycles generators via keys 1–4. Style system landed: `ColorMap` (Solid, LinearGradient, HsvSweep, Diverging), `Indexer` (ChordIndex, ChordLength, Angle, CurveT), `StrokeStyle` (width modulation + opacity), background, plus a `cyclic` flag for seamless closed-curve coloring. Build green, 42 doctest cases passing.
 
 Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui `Raylib_6_0`, Dear ImGui v1.92.7, nlohmann/json v3.11.3, doctest v2.4.11. rlImGui's `Raylib_*` tags name the matching raylib release — bump in lockstep.
 
 ## Active task
 
-**Phase 3 — Style system.** See ROADMAP.md for deliverables. Add `ColorMap` interface (Solid, LinearGradient, HsvSweep, Diverging) + `Indexer` enum (ChordIndex, ChordLength, Angle, CurveT) + `StrokeStyle` (width modulation) + background. Acceptance: HsvSweep + by-chord-length on a modular chord renders a smooth rainbow gradient.
+**Phase 4 — UI (rlImGui).** See ROADMAP.md for deliverables. Wire generator selector dropdown, parameter sliders + drag widgets, scroll-wheel-on-hover with Shift/Ctrl modifiers, coarse drag-time preview tier (gated on `ImGui::IsItemActive()`), style panel, and camera controls (middle-click pan, scroll-on-canvas zoom, F to fit, 0 to reset). Every input that mutates state must set the dirty flag. Acceptance: dragging `k` from 2 → 3 on the modular chord smoothly morphs cardioid → nephroid; idle CPU stays near-zero when no widget is active.
 
 ## Invariants
 
