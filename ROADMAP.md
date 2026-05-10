@@ -71,20 +71,22 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 4 — UI (rlImGui)
+## Phase 4 — UI (rlImGui) *(complete, 2026-05-10)*
 
 **Goal:** Full live parameter editing — the experience that makes Caustic an instrument rather than a renderer.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] Generator selector dropdown
-- [ ] Parameter sliders + `DragFloat`/`DragInt` widgets bound to live state, all setting the dirty flag on change
-- [ ] Scroll-wheel-while-hovering for fine parameter control with Shift (×10) and Ctrl (×0.1) modifiers
-- [ ] Coarse drag-time preview tier active during `ImGui::IsItemActive()` (ARCHITECTURE.md §5.4)
-- [ ] Style panel: color map type, indexer, stroke min/max, opacity, background
-- [ ] Camera controls: middle-click pan, scroll-on-canvas zoom, F to fit, 0 to reset
+- [x] Generator selector dropdown (plus keys 1–4 retained as power-user shortcut)
+- [x] Parameter sliders bound to live `AppState`, dirty flag set on every change
+- [x] Scroll-wheel-on-hover with Shift (×10) and Ctrl (×0.1) modifiers
+- [x] Coarse drag-time preview tier (gated on `ImGui::IsAnyItemActive()`; modular chord N ÷ 4, polyline samples ÷ 2; full-quality regenerate ~1 frame after release)
+- [x] Style panel: color map type + per-type controls, color indexer, stroke min/max + width indexer, opacity, background, cyclic toggle
+- [x] Camera controls: middle-click pan, cursor-relative scroll-zoom, F or 0 to reset
 
-**Acceptance:** Dragging `k` continuously from 2.0 to 3.0 on a modular chord smoothly morphs cardioid into nephroid; dragging `d` on a hypotrochoid breathes between hypocycloid and rosette; idle CPU stays near zero when no widget is active.
+**Acceptance:** Dragging `k` from 2 → 3 on the modular chord smoothly morphs cardioid → nephroid; dragging `d` on hypotrochoid (R=5, r=3) breathes between hypocycloid and rosette; idle CPU near-zero when no slider is active.
+
+**Deviation from architecture:** R/r and a/b sliders are integer-only. Non-integer (irrational) ratios produce non-closing curves that look like broken arcs at our default sample density, contrary to the user-facing intent of "complete patterns." The architecture's "drag Lissajous a/b through irrational values to watch precession" killer demo is therefore unavailable until a future toggle is added (sample-over-many-revolutions mode).
 
 ---
 

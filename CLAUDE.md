@@ -6,13 +6,15 @@ Caustic is a C++20 desktop studio for generative geometric art — chord pattern
 
 ## Current state
 
-**Phases 0–3 complete (2026-05-10); Phase 4 next.** All four v1 generators (modular chord, hypotrochoid, epitrochoid, Lissajous) implemented as `ParametricCurve` subclasses (modular_chord is a free function returning `ChordSet`); `GeometryBuffer` unifies polylines + chords; `RaylibRenderer` blits onto a cached `RenderTexture2D` with dirty-flag gating; app cycles generators via keys 1–4. Style system landed: `ColorMap` (Solid, LinearGradient, HsvSweep, Diverging), `Indexer` (ChordIndex, ChordLength, Angle, CurveT), `StrokeStyle` (width modulation + opacity), background, plus a `cyclic` flag for seamless closed-curve coloring. Build green, 42 doctest cases passing.
+**Phases 0–4 complete (2026-05-10); Phase 5 next.** All four v1 generators implemented; `GeometryBuffer`, dirty-flag rendering, full style system (colormaps, indexers, stroke modulation, cyclic remap for closed curves), and the rlImGui UI are all live. App now drives everything from `AppState`: generator combo, per-generator parameter sliders with scroll-wheel ±step / Shift×10 / Ctrl×0.1, coarse drag-time preview tier, full style panel, and camera (middle-click pan, cursor-relative scroll-zoom, F/0 reset). Build green, 42 doctest cases passing.
 
 Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui `Raylib_6_0`, Dear ImGui v1.92.7, nlohmann/json v3.11.3, doctest v2.4.11. rlImGui's `Raylib_*` tags name the matching raylib release — bump in lockstep.
 
+**Phase 4 deviation worth remembering:** R/r and a/b sliders are integer-only. The architecture's "drag through irrational a/b to watch Lissajous precess" demo is unavailable until someone adds a sample-over-many-revolutions mode + toggle. d, A, B, φ stay continuous (they don't affect closure).
+
 ## Active task
 
-**Phase 4 — UI (rlImGui).** See ROADMAP.md for deliverables. Wire generator selector dropdown, parameter sliders + drag widgets, scroll-wheel-on-hover with Shift/Ctrl modifiers, coarse drag-time preview tier (gated on `ImGui::IsItemActive()`), style panel, and camera controls (middle-click pan, scroll-on-canvas zoom, F to fit, 0 to reset). Every input that mutates state must set the dirty flag. Acceptance: dragging `k` from 2 → 3 on the modular chord smoothly morphs cardioid → nephroid; idle CPU stays near-zero when no widget is active.
+**Phase 5 — Preset system.** See ROADMAP.md for deliverables. JSON serialise/deserialise of full app state (generator + params + style + camera) using `nlohmann/json`; Save / Load buttons in File menu; preset browser panel; XDG user directory at `~/.config/caustic/presets/`; at least 5 bundled presets in `presets/`. Schema is authoritative in [SPEC.md §3](SPEC.md). Acceptance: save a preset, restart, load it — visual output identical; preset JSON is human-readable.
 
 ## Invariants
 
