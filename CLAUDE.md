@@ -18,14 +18,17 @@ Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui 
 
 ## Active task
 
-**Phase 9 — Multi-layer scenes + transforms + array tools + new curves + hybrid mode.** User chose Phase 9 next after seeing that the symmetric/tiled string-art images they keep returning to are blocked on multi-layer composition. ROADMAP Phase 9 was amended with per-layer transforms (translate/rotate/scale/mirror) and array tools (rotational, grid, mirror-reflect) — these turn "manually position 6 copies of a motif" into "set N=6 and click Apply".
+**Phases 9 and 10 complete (2026-05-10). v1.1 string-art expansion shipped.** The generator set now spans 9 types — modular chord, hypotrochoid, epitrochoid, Lissajous, rose, superformula, phyllotaxis (chord variant), polygon chord, linear envelope — with multi-layer scenes, per-layer transforms, and array tools (rotational, grid, mirror-reflect). The user's reference-image string-art patterns (deltoid envelope, corner fan, four-bowtie grid, RGB triangle) are now authorable, with the most-canonical examples shipped as bundled presets.
 
-Implementation order (Stage A then Stage B, both within Phase 9):
+Pick the next phase. Three roughly-independent v1.1 expansions plus the release path:
 
-- **Stage A — Scene infrastructure** (the load-bearing piece): refactor `caustic::Preset` to `caustic::Scene` with a list of `Layer { GeneratorSpec, StyleSpec, LayerTransform, visible }`. Bump preset version to 2; auto-promote v1 presets on load. Add `LayerTransform`, array tools, layer-management UI, and renderer iteration. Migrate the 5 bundled presets.
-- **Stage B — Content**: `RoseCurve`, `MaurerRose`, `SuperformulaCurve`, `PhyllotaxisGenerator`, and `HybridGenerator(curve, N, k)` (modular chord rule on any ParametricCurve).
+- **Phase 8** — Animation system (parameter envelopes over time, frame export). Novel feature; reasonably contained.
+- **Phase 11** — Strange attractors (Clifford / de Jong / Tinkerbell). New iterative-orbit pipeline tier; biggest remaining mathematical generator family.
+- **Phase 12** — Polish & release. README screenshots / animated GIFs, expanded curated preset gallery (see "Nice-to-have polish backlog"), Windows cross-compile, itch.io page. Shortest path to a public 1.0 if the current feature set is enough.
 
-After Phase 9, **Phase 10** (`LinearEnvelope` + `PolygonCurve`) is the natural follow-up — those are the missing generators that make the user's reference image patterns actually reachable with Stage A's array tools.
+**Deferred from Phase 9 Stage B** (not in any committed phase): full hybrid-mode generator (`HybridGenerator(curve, N, k)` — modular chord rule on any `ParametricCurve`) plus `MaurerRose` as its special case on rose. The concrete chord-set special cases (`polygon_chord`, `phyllotaxis_chord`) cover the user-visible string-art family without the nested-generator JSON refactor general hybrid mode would require.
+
+**Deferred from Phase 10:** canvas-drag editing for `LinearEnvelope` endpoints (sliders work, drag would be a UX upgrade).
 
 ## Invariants
 

@@ -183,18 +183,21 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 10 — String-art expansion *(v1.1)*
+## Phase 10 — String-art expansion *(complete, 2026-05-10)*
 
 **Goal:** Classical curve-stitching patterns — corner-fan parabolic envelopes, polygon-based modular chords, and the composite multi-figure scenes they enable. Caustic is named for the envelope curves these patterns produce; this phase fills the obvious gap in the generator set.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] `PolygonCurve(n_sides, rotation = 0)` — `ParametricCurve` along the perimeter of a regular n-gon. With Phase 9's hybrid mode, this gives polygon-vertex modular chords (deltoid envelopes from triangles, 6-spike stars from hexagons, etc.).
-- [ ] `LinearEnvelope(line_a, line_b, N, k)` — a new generator family separate from modular chord on a curve. Places N points along line segment A, N along segment B, and connects `i` on A to `round(k · i) mod N` on B. Returns a `ChordSet`. Envelope of the chord family is a parabola for k=1 (classic schoolchild "thread and nails" string art); other k values give richer caustic curves.
-- [ ] UI for placing line endpoints on the canvas (two draggable points per `LinearEnvelope` instance) — depends on the multi-layer scene infrastructure landing in Phase 9.
-- [ ] At least 6 bundled presets demonstrating the new patterns: corner-fan parabola, four-bowtie grid (composes 4 linear envelopes), RGB triangle (3 linear envelopes on the sides of a triangle), polygon modular chord (triangle/square/hexagon base curve), classic curve-stitched deltoid, polygon-based "times tables" variant.
+- [x] `PolygonCurve(n_sides, rotation = 0)` — `ParametricCurve` along the perimeter of a regular n-gon, parameterised at constant arc-length. Vertices sit on the unit circle.
+- [x] `polygon_chord(n_sides, N, k, rotation_rad)` — chord set: N points along the n-gon perimeter, modular chord rule applied. Deltoid envelope drops out as the n=3, k=2 special case; hexagram is n=6, k=2.
+- [x] `linear_envelope(a_start, a_end, b_start, b_end, N, k)` — chord set between two line segments. The classical schoolchild "thread and nails" pattern. Perpendicular segments + k=1 = parabolic corner fan; parallel segments + k=-1 = bowtie.
+- [x] App UI: sliders for n-sides / N / k / rotation on `PolygonChord`; `SliderFloat2` widgets for line endpoints on `LinearEnvelope`. Canvas-drag endpoint editing deferred as future polish.
+- [x] Six bundled presets covering the canonical patterns: `corner_fan`, `envelope_bowtie`, `deltoid`, `hexagram`, `four_bowties` (4-layer composition), `rgb_triangle` (3-layer composition on a triangle's sides).
 
-**Acceptance:** The deltoid envelope (modular chord on a triangle), the parabolic corner fan, and the four-bowtie grid all render correctly and export to clean SVG. Multi-layer scenes compose `LinearEnvelope` with existing trochoid/Lissajous generators without rendering glitches.
+**Acceptance:** Deltoid envelope renders cleanly from chord-rule-on-triangle at n=3, k=2. Parabolic corner fan with two perpendicular segments at k=1. Four-bowtie 2×2 grid composes 4 `LinearEnvelope` layers, each independently coloured and positioned. RGB triangle composes 3 `LinearEnvelope` layers on the sides of a triangle with R/G/B corner fans. All 6 presets export to SVG without rendering glitches. 102 doctest cases passing (88 → 102: 8 new polygon + 6 new linear-envelope cases); 20 CTest CLI smoke cases (14 → 20).
+
+**Deferred polish:** canvas-drag endpoint editing for `LinearEnvelope` (would be a meaningful UX win but the sliders work fine). Full hybrid mode (`HybridGenerator(curve, N, k)` for modular chord on any `ParametricCurve`) and Maurer rose still deferred from Phase 9 Stage B — `polygon_chord` and `phyllotaxis_chord` are concrete special cases that cover the user-visible string-art family without the nested-generator JSON refactor that general hybrid mode would require.
 
 ---
 
