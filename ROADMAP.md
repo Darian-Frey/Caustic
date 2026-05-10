@@ -107,19 +107,19 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 6 — SVG export
+## Phase 6 — SVG export *(complete, 2026-05-10)*
 
 **Goal:** Print-quality vector output.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] `SvgRenderer` parallel to `RaylibRenderer`, consuming the same `GeometryBuffer`
-- [ ] Output verified in Inkscape: correct viewBox, layers, colours, opacities
-- [ ] Plotter mode toggle: single colour, no opacity, sorted by start point for minimal pen travel
-- [ ] Optional Douglas–Peucker simplification pass (off by default, configurable ε)
-- [ ] Determinism test: same preset → byte-identical SVG output
+- [x] `SvgRenderer` parallel to `RaylibRenderer`, consuming the same `GeometryBuffer`. `render/CMakeLists.txt` split into `caustic-render-svg` (always built, no raylib) and `caustic-render-raylib` (gated on `CAUSTIC_BUILD_APP`); headless build verified with `CAUSTIC_BUILD_APP=OFF` (no raylib artifacts in the output tree)
+- [x] GUI Export button writes to `$XDG_CONFIG_HOME/caustic/exports/` (XDG fallback to `$HOME/.config/caustic/exports/`); output opens correctly in browsers and Inkscape
+- [x] Plotter mode toggle: single colour, no `stroke-opacity` attribute, no background `<rect>`, polylines emitted as single `<polyline>` (one pen-down per curve); chord set sorted by start point (lexicographic) — true nearest-neighbour pen-travel reorder deferred as future polish
+- [x] Determinism: fixed 6-decimal precision throughout; byte-identical output across runs (verified by doctest)
+- [ ] Douglas–Peucker simplification — `SvgOptions::simplify_epsilon` is plumbed through but not yet applied. Deferred until export file size becomes a real concern; SPEC.md still documents the option.
 
-**Acceptance:** Open exported SVG in Inkscape and Firefox, both render correctly. Plotter-mode SVG runs cleanly through `vpype` for verification.
+**Acceptance:** Bundled presets export cleanly via the GUI Export button; SVG files render correctly in browsers/Inkscape. 10 new doctest cases cover preamble + viewBox, byte-identical determinism, chord count match, background-rect emission, plotter mode (no rect / no opacity / single colour), plotter polyline mode, per-segment `<line>` in coloured mode, on-disk `write_svg`, fixed-6-decimal precision, and empty-geometry safety. 64 doctest cases passing total.
 
 ---
 

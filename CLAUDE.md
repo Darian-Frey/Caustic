@@ -6,17 +6,19 @@ Caustic is a C++20 desktop studio for generative geometric art — chord pattern
 
 ## Current state
 
-**Phases 0–5 complete (2026-05-10); Phase 6 next.** All four v1 generators, full style system (colormaps, indexers, stroke modulation, cyclic remap), and the rlImGui UI are live. App drives everything from `AppState` wrapping a `caustic::Preset`: generator combo, per-generator parameter sliders with scroll-wheel ±step / Shift×10 / Ctrl×0.1, coarse drag-time preview, full style panel, camera (middle-click pan, cursor-relative scroll-zoom, F/0 reset, F11 borderless fullscreen). Preset save/load via `nlohmann/json` works to `$XDG_CONFIG_HOME/caustic/presets`; five bundled presets in `presets/`. Window is resizable and the renderer's offscreen canvas reallocates to match. Build green, 54 doctest cases passing.
+**Phases 0–6 complete (2026-05-10); Phase 7 next.** All four v1 generators, full style system (colormaps, indexers, stroke modulation, cyclic remap), the rlImGui UI, preset save/load, and SVG export are live. `render/` is split: `caustic-render-svg` builds with zero raylib dependency (verified via `CAUSTIC_BUILD_APP=OFF`); `caustic-render-raylib` only builds for the GUI. SVG export writes deterministic 6-decimal output with plotter mode, accessible via the Presets panel. Build green, 64 doctest cases passing.
 
 Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui `Raylib_6_0`, Dear ImGui v1.92.7, nlohmann/json v3.11.3, doctest v2.4.11. rlImGui's `Raylib_*` tags name the matching raylib release — bump in lockstep.
 
 **Phase 4 deviation worth remembering:** R/r and a/b sliders are integer-only. The architecture's "drag through irrational a/b to watch Lissajous precess" demo is unavailable until someone adds a sample-over-many-revolutions mode + toggle. d, A, B, φ stay continuous (they don't affect closure).
 
-**Phase 5 deviation worth remembering:** `Preset.camera` stores pan as screen pixels (`pan_x_px`, `pan_y_px`) + zoom. SPEC.md previously documented `centre + zoom` (world coords); SPEC has been updated to match the implementation. Trade-off: not strictly portable across canvas sizes — load on a different window size and the figure's framing will shift. World-coord pan is a future cleanup.
+**Phase 5 deviation worth remembering:** `Preset.camera` stores pan as screen pixels (`pan_x_px`, `pan_y_px`) + zoom. SPEC has been updated to match the implementation. Not strictly portable across canvas sizes.
+
+**Phase 6 deviation worth remembering:** Douglas–Peucker simplification is documented in SPEC.md §5 and plumbed through `SvgOptions::simplify_epsilon` but not yet applied; deferred until file size becomes a real concern. Coloured polyline exports therefore emit one `<line>` per segment — ~4000 lines for the default samples. Plotter-mode chord sorting is lexicographic-by-start-point, not true nearest-neighbour.
 
 ## Active task
 
-**Phase 6 — SVG export.** See ROADMAP.md for deliverables. Implement `SvgRenderer` parallel to `RaylibRenderer`, consuming the same `GeometryBuffer`. Output verified in Inkscape (correct viewBox, layers, colours, opacities). Plotter mode toggle (single colour, no opacity, sorted by start point). Optional Douglas–Peucker simplification pass. Determinism test: same preset → byte-identical SVG. Per architecture invariant §1, `render/svg_renderer.{hpp,cpp}` must build without raylib so the CLI (Phase 7) can link it cleanly.
+**Phase 7 — CLI tool.** See ROADMAP.md for deliverables. `caustic-cli preset.json -o out.svg` interface with `--width`, `--height`, `--margin`, `--plotter`, `--simplify` flags (SPEC.md §5 is authoritative). The CLI links only `caustic::core` + `caustic::render-svg` — no raylib, no rlImGui. Use a headless build (`CAUSTIC_BUILD_APP=OFF`) to verify the invariant. CI smoke test: render every bundled preset, verify non-empty valid SVG output. Acceptance per ROADMAP: builds and runs on a headless Linux container with no display server; batch-renders all bundled presets under 30 seconds total.
 
 ## Invariants
 
