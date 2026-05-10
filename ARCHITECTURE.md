@@ -36,6 +36,8 @@ Distribution target: GitHub for source (open licence TBD), itch.io for pre-built
 - Rose curve + Maurer rose (chord-pattern variant, fits naturally into hybrid mode)
 - Superformula (Gielis) — single 6-parameter equation, huge variety from one generator
 - Phyllotaxis — golden-angle point disk, point or chord variant
+- Polygon base curve — `ParametricCurve` along an n-gon perimeter (closes the obvious string-art gap when combined with hybrid mode)
+- Linear envelope — chord set between two line segments; classical schoolchild "thread and nails" curve stitching
 - Strange attractors (Clifford, de Jong, Tinkerbell) — iterative-orbit family
 - Harmonograph generator
 - Web build via raylib + emscripten
@@ -140,7 +142,11 @@ y(t) = B sin(b t)
 
 Closed iff `a/b` rational. Integer ratios give the classic oscilloscope figures (1:1 = ellipse, 1:2 = bowtie, 2:3 = trefoil-like). Phase `φ` rotates the figure through its precession family. Grid-aligned aesthetic, fundamentally different from the trochoids.
 
-**Hybrid (v1.1):** sample any `ParametricCurve` at N equispaced points, then apply the modular chord rule. Lets you draw chord patterns on roulettes, Lissajous figures, roses, or arbitrary user curves. The Maurer rose (`r = sin(n θ)` sampled at `θ = k·d°` for fixed integer `d`, lines connecting consecutive samples) drops out as a special case.
+**Hybrid (v1.1):** sample any `ParametricCurve` at N equispaced points, then apply the modular chord rule. Lets you draw chord patterns on roulettes, Lissajous figures, roses, polygon perimeters, or arbitrary user curves. The Maurer rose (`r = sin(n θ)` sampled at `θ = k·d°` for fixed integer `d`, lines connecting consecutive samples) drops out as a special case, as does the polygon-vertex string art (deltoid envelopes from triangles, etc.) when combined with a `PolygonCurve`.
+
+**Polygon curve (v1.1):** `ParametricCurve` along the perimeter of a regular n-gon, traversed at constant arc-length. `t ∈ [0, 1]` maps to a position along the perimeter; combined with hybrid mode it gives polygon-vertex modular chord patterns — the classical string-art family with crisp corners (deltoid from triangle, hexagrams from hexagon, etc.).
+
+**Linear envelope (v1.1):** different generator topology from modular chord. Two line segments A and B (each defined by endpoints in world coordinates); N points are placed at uniform `t ∈ [0, 1]` along each; chord `i` connects A's `i`-th point to B's `round(k · i) mod N`-th. Returns a `ChordSet`. The envelope of the chord family is a parabola for k=1 (classic "thread and nails" curve stitching); other k values give richer caustic curves. Composes with multi-layer scenes (Phase 9) to author RGB-triangle and bowtie-grid scenes.
 
 **Superformula (v1.1):** Gielis's polar-form supershape — a single 6-parameter equation that captures squares, polygons, stars, flowers, and biological forms.
 
@@ -461,13 +467,19 @@ Each phase is roughly one focused sitting. Every phase ends with a runnable, dem
 - Phyllotaxis generator (point + chord variants)
 - Multi-layer composition (scene = list of generators)
 
-**Phase 10 — Strange attractors** *(v1.1)*
+**Phase 10 — String-art expansion** *(v1.1)*
+- `PolygonCurve` (`ParametricCurve` along an n-gon perimeter)
+- `LinearEnvelope` generator (chord set between two line segments)
+- Bundled presets for the classical string-art pattern family
+- Composes with Phase 9 multi-layer scenes (RGB triangles, bowtie grids)
+
+**Phase 11 — Strange attractors** *(v1.1)*
 - New `IterativeOrbit` pipeline tier (parallel to closed-form curves and chord sets)
 - Clifford, de Jong, Tinkerbell variants
 - Burn-in + sample to polyline; coarse bounding-box pre-pass
 - Seed `(x_0, y_0)` + parameters in the preset preserve determinism within a toolchain
 
-**Phase 11 — Polish & release**
+**Phase 12 — Polish & release**
 - README with screenshots and animated GIFs
 - Bundled preset gallery (~20 curated)
 - GitHub repo with standard header (per Shane's convention)
@@ -484,7 +496,7 @@ All major architectural decisions are settled. Recorded here for posterity:
 1. **Project name: Caustic.** From optics — the envelope curve where many rays converge. Mathematically meaningful (the smooth shapes that emerge from chord patterns *are* caustics in the technical sense), short, evocative, no naming conflicts. Beats Cycloid, Whorl, Heliotrope, Chordweave, Skein, Gyre, Volute, Moiré.
 2. **GUI: rlImGui.** Parameter density rules out raygui's flat widget vocabulary. Dear ImGui handles collapsible groups, tabs, and hybrid slider/text widgets, and rlImGui is the standard binding.
 3. **Language: C++20.** Rust + egui was considered and would be slightly cleaner architecturally, but C++ familiarity (terra-siege, Vector Gothic, ARCHIVIST) wins on time-to-first-pixel.
-4. **v1 generator set: modular chord + hypotrochoid + epitrochoid + Lissajous.** Rose curves cut from v1 — trochoid special cases already cover the petals/loops aesthetic — and moved to Phase 9 alongside the Maurer rose chord variant. Superformula and phyllotaxis added to Phase 9 as additional parametric curves; strange attractors graduated into a dedicated Phase 10 since they need a new iterative-orbit pipeline tier. L-systems and tilings (Penrose, Truchet) considered and explicitly rejected — they would shift Caustic's identity beyond envelope/roulette curves.
+4. **v1 generator set: modular chord + hypotrochoid + epitrochoid + Lissajous.** Rose curves cut from v1 — trochoid special cases already cover the petals/loops aesthetic — and moved to Phase 9 alongside the Maurer rose chord variant. Superformula and phyllotaxis added to Phase 9 as additional parametric curves; Phase 10 covers the classical string-art pattern family (`PolygonCurve` + `LinearEnvelope`) that Caustic is literally named for; strange attractors graduated into a dedicated Phase 11 since they need a new iterative-orbit pipeline tier. L-systems and tilings (Penrose, Truchet) considered and explicitly rejected — they would shift Caustic's identity beyond envelope/roulette curves.
 5. **Rendering model: on-demand, not per-frame.** Dirty-flag + cached `RenderTexture2D` canvas. Idle CPU/GPU when no parameter is moving. See §5.4.
 6. **Math precision: `double` throughout core**, cast to `float` only at the GPU boundary.
 7. **Coordinate convention: math-up (+y up, origin centre)** in core; flip in renderers only.
@@ -498,7 +510,7 @@ All major architectural decisions are settled. Recorded here for posterity:
 - **Aliasing at high chord counts.** raylib's basic `DrawLine` is unfiltered. Mitigation: render to higher-resolution offscreen RenderTexture, downsample. Or use `rlgl` with `GL_LINE_SMOOTH` (driver-dependent). Verify early in Phase 1.
 - **SVG file size.** 50k chords ≈ 5–10 MB. Mitigation: optional decimation pass at export, or fall back to high-res PNG for preview-only patterns.
 - **Numerical drift in deep MOND-style rational R/r.** Hypotrochoids with high gcd(R, r) ratios can drift visibly over thousands of revolutions. Mitigation: sample by closed-form `t` from analytic period, never integrate.
-- **Iterative attractor non-determinism across architectures.** Strange attractors (Phase 10) accumulate floating-point error over hundreds of thousands of iterations. Same toolchain → byte-identical SVG; different libm or compiler may diverge in the low decimal places. Mitigation: pin orbit math to `double`, document the caveat, treat the existing determinism invariant as "within one toolchain".
+- **Iterative attractor non-determinism across architectures.** Strange attractors (Phase 11) accumulate floating-point error over hundreds of thousands of iterations. Same toolchain → byte-identical SVG; different libm or compiler may diverge in the low decimal places. Mitigation: pin orbit math to `double`, document the caveat, treat the existing determinism invariant as "within one toolchain".
 - **Attractor bounding-box surprise.** Some parameter sweeps push orbits to infinity or collapse to a fixed point. Mitigation: coarse pre-pass with iteration budget; if the box is degenerate or unbounded, surface a warning rather than emit broken SVG.
 - **Scope creep.** Lissajous, harmonographs, audio reactivity, 3D variants, plotter G-code — all tempting, all defer to v1.1+.
 - **GUI binding maintenance.** rlImGui is community-maintained; check compatibility with the chosen raylib version at Phase 0.

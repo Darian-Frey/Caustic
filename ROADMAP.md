@@ -171,7 +171,22 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 10 — Strange attractors *(v1.1)*
+## Phase 10 — String-art expansion *(v1.1)*
+
+**Goal:** Classical curve-stitching patterns — corner-fan parabolic envelopes, polygon-based modular chords, and the composite multi-figure scenes they enable. Caustic is named for the envelope curves these patterns produce; this phase fills the obvious gap in the generator set.
+**Status:** Not started
+**Deliverables:**
+
+- [ ] `PolygonCurve(n_sides, rotation = 0)` — `ParametricCurve` along the perimeter of a regular n-gon. With Phase 9's hybrid mode, this gives polygon-vertex modular chords (deltoid envelopes from triangles, 6-spike stars from hexagons, etc.).
+- [ ] `LinearEnvelope(line_a, line_b, N, k)` — a new generator family separate from modular chord on a curve. Places N points along line segment A, N along segment B, and connects `i` on A to `round(k · i) mod N` on B. Returns a `ChordSet`. Envelope of the chord family is a parabola for k=1 (classic schoolchild "thread and nails" string art); other k values give richer caustic curves.
+- [ ] UI for placing line endpoints on the canvas (two draggable points per `LinearEnvelope` instance) — depends on the multi-layer scene infrastructure landing in Phase 9.
+- [ ] At least 6 bundled presets demonstrating the new patterns: corner-fan parabola, four-bowtie grid (composes 4 linear envelopes), RGB triangle (3 linear envelopes on the sides of a triangle), polygon modular chord (triangle/square/hexagon base curve), classic curve-stitched deltoid, polygon-based "times tables" variant.
+
+**Acceptance:** The deltoid envelope (modular chord on a triangle), the parabolic corner fan, and the four-bowtie grid all render correctly and export to clean SVG. Multi-layer scenes compose `LinearEnvelope` with existing trochoid/Lissajous generators without rendering glitches.
+
+---
+
+## Phase 11 — Strange attractors *(v1.1)*
 
 **Goal:** Iterative-orbit generator family — Clifford, de Jong, Tinkerbell. New "trace N iterations as polyline" pipeline tier alongside the closed-form curve and chord-set tiers.
 **Status:** Not started
@@ -188,7 +203,7 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 11 — Polish & release
+## Phase 12 — Polish & release
 
 **Goal:** Public 1.0 release on GitHub and itch.io.
 **Status:** Not started

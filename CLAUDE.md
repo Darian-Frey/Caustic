@@ -83,5 +83,6 @@ Do NOT add the following without explicit confirmation:
 
 Planned for v1.1 (do not lobby back into v1):
 
-- Rose curve, Maurer rose, superformula, phyllotaxis — Phase 9 (parametric curve expansion)
-- Strange attractors (Clifford, de Jong, Tinkerbell) — Phase 10 (iterative-orbit infrastructure, seed-based determinism)
+- Rose curve, Maurer rose, superformula, phyllotaxis — Phase 9 (parametric curve expansion + hybrid mode + multi-layer)
+- Polygon base curve, linear two-segment envelope — Phase 10 (string-art expansion; classical curve-stitching patterns the project is literally named for)
+- Strange attractors (Clifford, de Jong, Tinkerbell) — Phase 11 (iterative-orbit infrastructure, seed-based determinism)
