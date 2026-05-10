@@ -7,11 +7,13 @@
 #include <string>
 #include <vector>
 
+#include <caustic/array_tools.hpp>
 #include <caustic/colormap.hpp>
 #include <caustic/geometry_buffer.hpp>
 #include <caustic/geometry_factory.hpp>
 #include <caustic/preset.hpp>
 #include <caustic/preset_io.hpp>
+#include <caustic/scene_render.hpp>
 #include <caustic/style.hpp>
 #include <caustic/style_factory.hpp>
 
@@ -40,6 +42,7 @@ const char* const kColorMapNames[] = {
 
 struct AppState {
     caustic::Preset preset;
+    int current_layer_idx = 0;  // index into preset.scene.layers being edited by the UI
 
     char save_name_buf[64] = "untitled";
     char export_name_buf[64] = "export";
@@ -53,6 +56,16 @@ struct AppState {
     bool any_active_last_frame = false;
     bool any_active_two_frames_ago = false;
     bool last_render_was_coarse = false;
+
+    // Ensure preset has at least one layer; clamp current_layer_idx within bounds.
+    caustic::Layer& current_layer() {
+        if (preset.scene.layers.empty()) preset.scene.layers.emplace_back();
+        if (current_layer_idx < 0 ||
+            current_layer_idx >= static_cast<int>(preset.scene.layers.size())) {
+            current_layer_idx = 0;
+        }
+        return preset.scene.layers[current_layer_idx];
+    }
 };
 
 fs::path user_export_dir() {
@@ -134,7 +147,7 @@ void refresh_preset_lists(AppState& state) {
 // UI panels
 
 void render_param_panel(AppState& state) {
-    auto& p = state.preset;
+    auto& p = state.current_layer();  // edit the layer the user has selected
     ImGui::Begin("Parameters");
 
     int gen_idx = static_cast<int>(p.generator.type);
@@ -193,7 +206,7 @@ void render_param_panel(AppState& state) {
 }
 
 void render_style_panel(AppState& state) {
-    caustic::StyleSpec& s = state.preset.style;
+    caustic::StyleSpec& s = state.current_layer().style;
     ImGui::Begin("Style");
 
     int cm = static_cast<int>(s.colormap_type);
@@ -245,11 +258,143 @@ void render_style_panel(AppState& state) {
 
     ImGui::Separator();
 
-    if (color_edit_double("background", &s.background)) state.dirty = true;
+    if (color_edit_double("background", &state.preset.scene.background)) state.dirty = true;
     if (ImGui::Checkbox("cyclic (closed-curve continuity)", &s.cyclic)) state.dirty = true;
 
     ImGui::Separator();
     ImGui::TextDisabled("click any color square for hex/RGB/HSV input");
+
+    ImGui::End();
+}
+
+void render_layers_panel(AppState& state) {
+    ImGui::Begin("Layers");
+
+    // ----- Layer list -----
+    auto& layers = state.preset.scene.layers;
+    if (layers.empty()) layers.emplace_back();
+    if (state.current_layer_idx >= static_cast<int>(layers.size())) state.current_layer_idx = 0;
+    if (state.current_layer_idx < 0) state.current_layer_idx = 0;
+
+    if (ImGui::BeginListBox("##layers", ImVec2(-FLT_MIN, 6 * ImGui::GetTextLineHeightWithSpacing()))) {
+        for (int i = 0; i < static_cast<int>(layers.size()); ++i) {
+            ImGui::PushID(i);
+            bool visible = layers[i].visible;
+            if (ImGui::Checkbox("##visible", &visible)) {
+                layers[i].visible = visible;
+                state.dirty = true;
+            }
+            ImGui::SameLine();
+            const std::string label = layers[i].name.empty()
+                ? ("layer " + std::to_string(i))
+                : layers[i].name;
+            const bool selected = (i == state.current_layer_idx);
+            if (ImGui::Selectable(label.c_str(), selected)) {
+                state.current_layer_idx = i;
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndListBox();
+    }
+
+    // ----- Layer actions -----
+    if (ImGui::Button("Add")) {
+        caustic::Layer l;
+        l.name = "layer " + std::to_string(layers.size());
+        layers.push_back(std::move(l));
+        state.current_layer_idx = static_cast<int>(layers.size()) - 1;
+        state.dirty = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Duplicate") && state.current_layer_idx >= 0) {
+        caustic::Layer copy = layers[state.current_layer_idx];
+        copy.name += " (copy)";
+        layers.insert(layers.begin() + state.current_layer_idx + 1, std::move(copy));
+        state.current_layer_idx += 1;
+        state.dirty = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Remove") && layers.size() > 1) {
+        layers.erase(layers.begin() + state.current_layer_idx);
+        if (state.current_layer_idx >= static_cast<int>(layers.size())) {
+            state.current_layer_idx = static_cast<int>(layers.size()) - 1;
+        }
+        state.dirty = true;
+    }
+    if (ImGui::Button("Move up") && state.current_layer_idx > 0) {
+        std::swap(layers[state.current_layer_idx], layers[state.current_layer_idx - 1]);
+        state.current_layer_idx -= 1;
+        state.dirty = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Move down") &&
+        state.current_layer_idx + 1 < static_cast<int>(layers.size())) {
+        std::swap(layers[state.current_layer_idx], layers[state.current_layer_idx + 1]);
+        state.current_layer_idx += 1;
+        state.dirty = true;
+    }
+
+    // ----- Transform sliders for the current layer -----
+    ImGui::Separator();
+    ImGui::Text("Transform");
+    auto& t = state.current_layer().transform;
+    char name_buf[64];
+    std::strncpy(name_buf, state.current_layer().name.c_str(), sizeof(name_buf) - 1);
+    name_buf[sizeof(name_buf) - 1] = '\0';
+    if (ImGui::InputText("name", name_buf, sizeof(name_buf))) {
+        state.current_layer().name = name_buf;
+    }
+    if (slider_double_w("tx",    &t.translate.x,  -10.0, 10.0, 0.01)) state.dirty = true;
+    if (slider_double_w("ty",    &t.translate.y,  -10.0, 10.0, 0.01)) state.dirty = true;
+    if (slider_double_w("rot",   &t.rotate_rad,   -2.0 * std::numbers::pi, 2.0 * std::numbers::pi, 0.01)) state.dirty = true;
+    if (slider_double_w("scale", &t.scale,         0.05, 5.0, 0.01))  state.dirty = true;
+    if (ImGui::Checkbox("mirror x", &t.mirror_x)) state.dirty = true;
+    ImGui::SameLine();
+    if (ImGui::Checkbox("mirror y", &t.mirror_y)) state.dirty = true;
+    if (ImGui::Button("Reset transform")) {
+        t = {};
+        state.dirty = true;
+    }
+
+    // ----- Array tools -----
+    ImGui::Separator();
+    ImGui::Text("Array tools — Apply replaces the selected layer with N derived copies");
+    static int array_n = 6;
+    static int grid_rows = 2;
+    static int grid_cols = 4;
+    static float grid_spacing = 1.0f;
+    static int mirror_axis_idx = 1;  // Y by default (left-right mirror)
+
+    ImGui::SliderInt("N (rotational)", &array_n, 2, 24);
+    if (ImGui::Button("Apply rotational array")) {
+        auto derived = caustic::rotational_array(state.current_layer(), array_n);
+        const int idx = state.current_layer_idx;
+        layers.erase(layers.begin() + idx);
+        layers.insert(layers.begin() + idx, derived.begin(), derived.end());
+        state.dirty = true;
+    }
+    ImGui::SliderInt("rows", &grid_rows, 1, 10);
+    ImGui::SliderInt("cols", &grid_cols, 1, 10);
+    ImGui::SliderFloat("spacing", &grid_spacing, 0.1f, 5.0f);
+    if (ImGui::Button("Apply grid tile")) {
+        auto derived = caustic::grid_tile(state.current_layer(), grid_rows, grid_cols,
+                                          {grid_spacing, grid_spacing});
+        const int idx = state.current_layer_idx;
+        layers.erase(layers.begin() + idx);
+        layers.insert(layers.begin() + idx, derived.begin(), derived.end());
+        state.dirty = true;
+    }
+    const char* axis_names[] = {"X axis", "Y axis"};
+    ImGui::Combo("mirror axis", &mirror_axis_idx, axis_names, IM_ARRAYSIZE(axis_names));
+    if (ImGui::Button("Apply mirror reflect")) {
+        const caustic::MirrorAxis axis = (mirror_axis_idx == 0) ? caustic::MirrorAxis::X
+                                                                : caustic::MirrorAxis::Y;
+        auto derived = caustic::mirror_reflect(state.current_layer(), axis);
+        const int idx = state.current_layer_idx;
+        layers.erase(layers.begin() + idx);
+        layers.insert(layers.begin() + idx, derived.begin(), derived.end());
+        state.dirty = true;
+    }
 
     ImGui::End();
 }
@@ -330,8 +475,8 @@ void render_preset_panel(AppState& state) {
             opts.plotter_mode = state.export_plotter_mode;
             // Export always runs at full quality — see ARCHITECTURE.md §5.4.
             caustic::write_svg(path,
-                               caustic::geometry_from_spec(state.preset.generator, /*coarse=*/false),
-                               caustic::style_from_spec(state.preset.style),
+                               caustic::build_renderables(state.preset.scene, /*coarse=*/false),
+                               state.preset.scene.background,
                                opts);
             state.status_message = "exported " + path.filename().string();
         } catch (const std::exception& e) {
@@ -391,12 +536,13 @@ int main() {
         }
 
         if (!io.WantCaptureKeyboard) {
-            const auto prev = state.preset.generator.type;
-            if (IsKeyPressed(KEY_ONE))   state.preset.generator.type = caustic::GeneratorType::ModularChord;
-            if (IsKeyPressed(KEY_TWO))   state.preset.generator.type = caustic::GeneratorType::Hypotrochoid;
-            if (IsKeyPressed(KEY_THREE)) state.preset.generator.type = caustic::GeneratorType::Epitrochoid;
-            if (IsKeyPressed(KEY_FOUR))  state.preset.generator.type = caustic::GeneratorType::Lissajous;
-            if (state.preset.generator.type != prev) state.dirty = true;
+            auto& cur_gen = state.current_layer().generator;
+            const auto prev = cur_gen.type;
+            if (IsKeyPressed(KEY_ONE))   cur_gen.type = caustic::GeneratorType::ModularChord;
+            if (IsKeyPressed(KEY_TWO))   cur_gen.type = caustic::GeneratorType::Hypotrochoid;
+            if (IsKeyPressed(KEY_THREE)) cur_gen.type = caustic::GeneratorType::Epitrochoid;
+            if (IsKeyPressed(KEY_FOUR))  cur_gen.type = caustic::GeneratorType::Lissajous;
+            if (cur_gen.type != prev) state.dirty = true;
 
             if (IsKeyPressed(KEY_F) || IsKeyPressed(KEY_ZERO)) {
                 state.preset.camera = caustic::CameraState{};
@@ -413,8 +559,8 @@ int main() {
         const bool just_released = state.any_active_two_frames_ago && !dragging;
         if (state.dirty || (just_released && state.last_render_was_coarse)) {
             const bool coarse = dragging;
-            renderer.redraw(caustic::geometry_from_spec(state.preset.generator, coarse),
-                            caustic::style_from_spec(state.preset.style),
+            renderer.redraw(caustic::build_renderables(state.preset.scene, coarse),
+                            state.preset.scene.background,
                             state.preset.camera);
             state.dirty = false;
             state.last_render_was_coarse = coarse;
@@ -427,6 +573,7 @@ int main() {
         rlImGuiBegin();
         render_param_panel(state);
         render_style_panel(state);
+        render_layers_panel(state);
         render_preset_panel(state);
         const bool active_now = ImGui::IsAnyItemActive();
         rlImGuiEnd();

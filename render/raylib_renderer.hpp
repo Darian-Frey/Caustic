@@ -1,8 +1,10 @@
 #pragma once
 
+#include <vector>
+
 #include <caustic/camera.hpp>
-#include <caustic/geometry_buffer.hpp>
-#include <caustic/style.hpp>
+#include <caustic/color.hpp>
+#include <caustic/scene_render.hpp>
 
 #include <raylib.h>
 
@@ -20,7 +22,13 @@ public:
     // dirty so the next frame redraws into the fresh canvas.
     void resize(int width, int height);
 
-    void redraw(const GeometryBuffer& geo, const Style& style, const CameraState& camera);
+    // Multi-layer redraw. Iterates layers in order, applies the scene-level
+    // background as ClearBackground colour, then draws each layer's geometry
+    // with its own style on top.
+    void redraw(const std::vector<LayerRender>& layers,
+                Color background,
+                const CameraState& camera);
+
     void blit_to_screen() const;
 
 private:

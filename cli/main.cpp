@@ -5,10 +5,9 @@
 #include <string>
 #include <string_view>
 
-#include <caustic/geometry_factory.hpp>
 #include <caustic/preset.hpp>
 #include <caustic/preset_io.hpp>
-#include <caustic/style_factory.hpp>
+#include <caustic/scene_render.hpp>
 
 #include "svg_renderer.hpp"
 
@@ -135,15 +134,14 @@ int main(int argc, char** argv) {
     }
 
     try {
-        const auto geo   = caustic::geometry_from_spec(preset.generator);
-        const auto style = caustic::style_from_spec(preset.style);
+        const auto layers = caustic::build_renderables(preset.scene);
         caustic::SvgOptions opts;
         opts.width            = args.width;
         opts.height           = args.height;
         opts.margin           = args.margin;
         opts.plotter_mode     = args.plotter;
         opts.simplify_epsilon = args.simplify_eps;
-        caustic::write_svg(args.output_path, geo, style, opts);
+        caustic::write_svg(args.output_path, layers, preset.scene.background, opts);
     } catch (const std::exception& e) {
         std::cerr << "output write failed: " << e.what() << "\n";
         return 4;

@@ -2,9 +2,10 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
-#include <caustic/geometry_buffer.hpp>
-#include <caustic/style.hpp>
+#include <caustic/color.hpp>
+#include <caustic/scene_render.hpp>
 
 namespace caustic {
 
@@ -27,13 +28,16 @@ struct SvgOptions {
     double simplify_epsilon = 0.0;
 };
 
-// Render the buffer + style to an SVG string. Same input → byte-identical output.
-std::string render_svg(const GeometryBuffer& geo, const Style& style, const SvgOptions& opts = {});
+// Render a list of pre-built layers to an SVG string. Each layer becomes one
+// <g> element. Same input → byte-identical output.
+std::string render_svg(const std::vector<LayerRender>& layers,
+                       Color background,
+                       const SvgOptions& opts = {});
 
 // Convenience: render + write to disk. Creates parent directories.
 void write_svg(const std::filesystem::path& path,
-               const GeometryBuffer& geo,
-               const Style& style,
+               const std::vector<LayerRender>& layers,
+               Color background,
                const SvgOptions& opts = {});
 
 }  // namespace caustic

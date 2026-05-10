@@ -11,6 +11,7 @@ add_executable(test_caustic
     test_indexer.cpp
     test_preset_io.cpp
     test_svg_renderer.cpp
+    test_array_tools.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE

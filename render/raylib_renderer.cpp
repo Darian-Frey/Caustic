@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstddef>
 
-#include <caustic/color.hpp>
 #include <caustic/indexer.hpp>
 #include <caustic/vec2.hpp>
 
@@ -12,14 +11,16 @@ namespace caustic {
 
 namespace {
 
-double max_extent(const GeometryBuffer& geo) {
+double max_extent(const std::vector<LayerRender>& layers) {
     double m = 0.0;
     auto track = [&](Vec2 v) {
         m = std::max(m, std::max(std::abs(v.x), std::abs(v.y)));
     };
-    for (const auto& c : geo.chords) { track(c.a); track(c.b); }
-    for (const auto& p : geo.polylines) {
-        for (const auto& v : p) track(v);
+    for (const auto& L : layers) {
+        for (const auto& c : L.geometry.chords) { track(c.a); track(c.b); }
+        for (const auto& p : L.geometry.polylines) {
+            for (const auto& v : p) track(v);
+        }
     }
     return m;
 }
@@ -83,8 +84,10 @@ void RaylibRenderer::resize(int width, int height) {
     canvas_ = LoadRenderTexture(width_, height_);
 }
 
-void RaylibRenderer::redraw(const GeometryBuffer& geo, const Style& style, const CameraState& camera) {
-    double extent = max_extent(geo);
+void RaylibRenderer::redraw(const std::vector<LayerRender>& layers,
+                            Color background,
+                            const CameraState& camera) {
+    double extent = max_extent(layers);
     if (extent < 1e-9) extent = 1.0;
 
     const double fit_scale = std::min(width_, height_) * 0.45 / extent;
@@ -100,34 +103,38 @@ void RaylibRenderer::redraw(const GeometryBuffer& geo, const Style& style, const
     };
 
     BeginTextureMode(canvas_);
-    ClearBackground(to_raylib(style.background, 1.0));
+    ClearBackground(to_raylib(background, 1.0));
 
-    if (!geo.chords.empty() && style.color_map) {
-        const std::size_t N = geo.chords.size();
-        const double max_len = max_chord_length(geo.chords);
-        for (std::size_t i = 0; i < N; ++i) {
-            const Chord& c = geo.chords[i];
-            const double tc = remap_cyclic(indexer_value(style.color_indexer, c.a, c.b, i, N, max_len), style.cyclic);
-            const double tw = remap_cyclic(indexer_value(style.stroke.width_indexer, c.a, c.b, i, N, max_len), style.cyclic);
-            const Color col = style.color_map->at(tc);
-            const float w = static_cast<float>(lerp_width(style.stroke.width_min, style.stroke.width_max, tw));
-            DrawLineEx(to_screen(c.a), to_screen(c.b), w, to_raylib(col, style.stroke.opacity));
+    for (const auto& L : layers) {
+        if (!L.style.color_map) continue;
+
+        // Chords
+        if (!L.geometry.chords.empty()) {
+            const std::size_t N = L.geometry.chords.size();
+            const double max_len = max_chord_length(L.geometry.chords);
+            for (std::size_t i = 0; i < N; ++i) {
+                const Chord& c = L.geometry.chords[i];
+                const double tc = remap_cyclic(indexer_value(L.style.color_indexer, c.a, c.b, i, N, max_len), L.style.cyclic);
+                const double tw = remap_cyclic(indexer_value(L.style.stroke.width_indexer, c.a, c.b, i, N, max_len), L.style.cyclic);
+                const Color col = L.style.color_map->at(tc);
+                const float w = static_cast<float>(lerp_width(L.style.stroke.width_min, L.style.stroke.width_max, tw));
+                DrawLineEx(to_screen(c.a), to_screen(c.b), w, to_raylib(col, L.style.stroke.opacity));
+            }
         }
-    }
 
-    if (style.color_map) {
-        for (const auto& p : geo.polylines) {
+        // Polylines
+        for (const auto& p : L.geometry.polylines) {
             if (p.size() < 2) continue;
             const std::size_t segs = p.size() - 1;
             const double max_len = max_polyline_segment_length(p);
             for (std::size_t i = 0; i < segs; ++i) {
                 const Vec2 a = p[i];
                 const Vec2 b = p[i + 1];
-                const double tc = remap_cyclic(indexer_value(style.color_indexer, a, b, i, segs, max_len), style.cyclic);
-                const double tw = remap_cyclic(indexer_value(style.stroke.width_indexer, a, b, i, segs, max_len), style.cyclic);
-                const Color col = style.color_map->at(tc);
-                const float w = static_cast<float>(lerp_width(style.stroke.width_min, style.stroke.width_max, tw));
-                DrawLineEx(to_screen(a), to_screen(b), w, to_raylib(col, style.stroke.opacity));
+                const double tc = remap_cyclic(indexer_value(L.style.color_indexer, a, b, i, segs, max_len), L.style.cyclic);
+                const double tw = remap_cyclic(indexer_value(L.style.stroke.width_indexer, a, b, i, segs, max_len), L.style.cyclic);
+                const Color col = L.style.color_map->at(tc);
+                const float w = static_cast<float>(lerp_width(L.style.stroke.width_min, L.style.stroke.width_max, tw));
+                DrawLineEx(to_screen(a), to_screen(b), w, to_raylib(col, L.style.stroke.opacity));
             }
         }
     }

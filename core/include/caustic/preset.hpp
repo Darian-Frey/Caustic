@@ -1,11 +1,14 @@
 #pragma once
 
+#include <cmath>
 #include <numbers>
 #include <string>
+#include <vector>
 
 #include <caustic/camera.hpp>
 #include <caustic/color.hpp>
 #include <caustic/indexer.hpp>
+#include <caustic/vec2.hpp>
 
 namespace caustic {
 
@@ -47,8 +50,6 @@ struct LissajousParams {
     int samples = 4000;
 };
 
-// Tagged union of generator parameters. Only the field matching `type` is
-// load-bearing for any given preset; the others hold defaults.
 struct GeneratorSpec {
     GeneratorType type = GeneratorType::ModularChord;
     ModularChordParams chord;
@@ -58,8 +59,7 @@ struct GeneratorSpec {
 };
 
 // ---------------------------------------------------------------------------
-// Style spec (serializable; runtime equivalent is caustic::Style with a
-// constructed shared_ptr<ColorMap>)
+// Style spec (serializable; runtime equivalent is caustic::Style)
 
 enum class ColorMapType {
     Solid,
@@ -89,19 +89,61 @@ struct StyleSpec {
     Indexer stroke_width_indexer = Indexer::ChordIndex;
     double opacity = 0.6;
 
-    Color background = {0.04, 0.04, 0.04, 1.0};
-
     bool cyclic = false;
 };
 
 // ---------------------------------------------------------------------------
-// Top-level preset
+// Layer transform — applied to a layer's geometry pre-render.
+//
+// Application order (right-to-left composition): Mirror → Scale → Rotate → Translate.
+// Equivalent to: v' = T + R(θ) · S · M · v.
 
-struct Preset {
-    int version = 1;
+struct LayerTransform {
+    Vec2 translate = {0.0, 0.0};
+    double rotate_rad = 0.0;
+    double scale = 1.0;
+    bool mirror_x = false;  // negate x (reflect across the y-axis)
+    bool mirror_y = false;  // negate y (reflect across the x-axis)
+};
+
+inline Vec2 apply(LayerTransform t, Vec2 v) {
+    if (t.mirror_x) v.x = -v.x;
+    if (t.mirror_y) v.y = -v.y;
+    v.x *= t.scale;
+    v.y *= t.scale;
+    const double c = std::cos(t.rotate_rad);
+    const double s = std::sin(t.rotate_rad);
+    const double x = v.x * c - v.y * s;
+    const double y = v.x * s + v.y * c;
+    return {x + t.translate.x, y + t.translate.y};
+}
+
+// ---------------------------------------------------------------------------
+// Layer and Scene
+
+struct Layer {
     std::string name;
     GeneratorSpec generator;
     StyleSpec style;
+    LayerTransform transform;
+    bool visible = true;
+};
+
+struct Scene {
+    Color background = {0.04, 0.04, 0.04, 1.0};
+    // Start with one empty editable layer so a default-constructed Preset has
+    // something for the UI to bind to and tests can index scene.layers[0].
+    std::vector<Layer> layers = {Layer{}};
+};
+
+// ---------------------------------------------------------------------------
+// Top-level preset (v2 = scene-based; v1 readers still accepted via auto-promote
+// in preset_io.hpp).
+
+struct Preset {
+    int version = 2;
+    std::string name;
+    Scene scene;
     CameraState camera;
 };
 

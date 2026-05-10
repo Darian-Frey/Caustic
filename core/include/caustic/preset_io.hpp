@@ -89,153 +89,238 @@ inline ColorMapType colormap_type_from_string(const std::string& s) {
     throw std::runtime_error("unknown colormap type: " + s);
 }
 
+// --- nested object writers/readers --------------------------------------
+
+inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
+    g["type"] = generator_type_to_string(gs.type);
+    auto& gp = g["params"] = nlohmann::json::object();
+    switch (gs.type) {
+        case GeneratorType::ModularChord:
+            gp["N"] = gs.chord.N;
+            gp["k"] = gs.chord.k;
+            break;
+        case GeneratorType::Hypotrochoid:
+            gp["R"] = gs.hypo.R;
+            gp["r"] = gs.hypo.r;
+            gp["d"] = gs.hypo.d;
+            gp["samples"] = gs.hypo.samples;
+            break;
+        case GeneratorType::Epitrochoid:
+            gp["R"] = gs.epi.R;
+            gp["r"] = gs.epi.r;
+            gp["d"] = gs.epi.d;
+            gp["samples"] = gs.epi.samples;
+            break;
+        case GeneratorType::Lissajous:
+            gp["A"] = gs.liss.A;
+            gp["B"] = gs.liss.B;
+            gp["a"] = gs.liss.a;
+            gp["b"] = gs.liss.b;
+            gp["phi"] = gs.liss.phi;
+            gp["samples"] = gs.liss.samples;
+            break;
+    }
+}
+
+inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
+    gs.type = generator_type_from_string(g.at("type").get<std::string>());
+    const auto& gp = g.at("params");
+    switch (gs.type) {
+        case GeneratorType::ModularChord:
+            gs.chord.N = gp.value("N", gs.chord.N);
+            gs.chord.k = gp.value("k", gs.chord.k);
+            break;
+        case GeneratorType::Hypotrochoid:
+            gs.hypo.R       = gp.value("R", gs.hypo.R);
+            gs.hypo.r       = gp.value("r", gs.hypo.r);
+            gs.hypo.d       = gp.value("d", gs.hypo.d);
+            gs.hypo.samples = gp.value("samples", gs.hypo.samples);
+            break;
+        case GeneratorType::Epitrochoid:
+            gs.epi.R       = gp.value("R", gs.epi.R);
+            gs.epi.r       = gp.value("r", gs.epi.r);
+            gs.epi.d       = gp.value("d", gs.epi.d);
+            gs.epi.samples = gp.value("samples", gs.epi.samples);
+            break;
+        case GeneratorType::Lissajous:
+            gs.liss.A       = gp.value("A", gs.liss.A);
+            gs.liss.B       = gp.value("B", gs.liss.B);
+            gs.liss.a       = gp.value("a", gs.liss.a);
+            gs.liss.b       = gp.value("b", gs.liss.b);
+            gs.liss.phi     = gp.value("phi", gs.liss.phi);
+            gs.liss.samples = gp.value("samples", gs.liss.samples);
+            break;
+    }
+}
+
+inline void style_to_json(nlohmann::json& s, const StyleSpec& ss) {
+    auto& cm = s["color_map"] = nlohmann::json::object();
+    cm["type"] = colormap_type_to_string(ss.colormap_type);
+    switch (ss.colormap_type) {
+        case ColorMapType::Solid:
+            cm["color"] = color_to_hex(ss.solid_color);
+            break;
+        case ColorMapType::LinearGradient:
+            cm["start"] = color_to_hex(ss.gradient_start);
+            cm["end"]   = color_to_hex(ss.gradient_end);
+            break;
+        case ColorMapType::HsvSweep:
+            cm["hue_start"]  = ss.hue_start;
+            cm["hue_end"]    = ss.hue_end;
+            cm["saturation"] = ss.hsv_saturation;
+            cm["value"]      = ss.hsv_value;
+            break;
+        case ColorMapType::Diverging:
+            cm["negative"] = color_to_hex(ss.div_negative);
+            cm["midpoint"] = color_to_hex(ss.div_midpoint);
+            cm["positive"] = color_to_hex(ss.div_positive);
+            break;
+    }
+    s["color_indexer"] = indexer_to_string(ss.color_indexer);
+    auto& stroke = s["stroke"] = nlohmann::json::object();
+    stroke["width_min"]     = ss.stroke_width_min;
+    stroke["width_max"]     = ss.stroke_width_max;
+    stroke["width_indexer"] = indexer_to_string(ss.stroke_width_indexer);
+    stroke["opacity"]       = ss.opacity;
+    s["cyclic"] = ss.cyclic;
+}
+
+inline void style_from_json(const nlohmann::json& s, StyleSpec& ss) {
+    const auto& cm = s.at("color_map");
+    ss.colormap_type = colormap_type_from_string(cm.at("type").get<std::string>());
+    switch (ss.colormap_type) {
+        case ColorMapType::Solid:
+            ss.solid_color = color_from_hex(cm.at("color").get<std::string>());
+            break;
+        case ColorMapType::LinearGradient:
+            ss.gradient_start = color_from_hex(cm.at("start").get<std::string>());
+            ss.gradient_end   = color_from_hex(cm.at("end").get<std::string>());
+            break;
+        case ColorMapType::HsvSweep:
+            ss.hue_start      = cm.value("hue_start", ss.hue_start);
+            ss.hue_end        = cm.value("hue_end",   ss.hue_end);
+            ss.hsv_saturation = cm.value("saturation", ss.hsv_saturation);
+            ss.hsv_value      = cm.value("value",      ss.hsv_value);
+            break;
+        case ColorMapType::Diverging:
+            ss.div_negative = color_from_hex(cm.at("negative").get<std::string>());
+            ss.div_midpoint = color_from_hex(cm.at("midpoint").get<std::string>());
+            ss.div_positive = color_from_hex(cm.at("positive").get<std::string>());
+            break;
+    }
+    ss.color_indexer = indexer_from_string(s.at("color_indexer").get<std::string>());
+    const auto& stroke = s.at("stroke");
+    ss.stroke_width_min = stroke.value("width_min", ss.stroke_width_min);
+    ss.stroke_width_max = stroke.value("width_max", ss.stroke_width_max);
+    ss.stroke_width_indexer = indexer_from_string(
+        stroke.value("width_indexer", std::string("by_chord_index")));
+    ss.opacity = stroke.value("opacity", ss.opacity);
+    ss.cyclic = s.value("cyclic", ss.cyclic);
+}
+
+inline void transform_to_json(nlohmann::json& j, const LayerTransform& t) {
+    j["translate"] = nlohmann::json::array({t.translate.x, t.translate.y});
+    j["rotate_rad"] = t.rotate_rad;
+    j["scale"] = t.scale;
+    j["mirror_x"] = t.mirror_x;
+    j["mirror_y"] = t.mirror_y;
+}
+
+inline void transform_from_json(const nlohmann::json& j, LayerTransform& t) {
+    if (j.contains("translate")) {
+        const auto& tr = j.at("translate");
+        if (tr.is_array() && tr.size() == 2) {
+            t.translate.x = tr.at(0).get<double>();
+            t.translate.y = tr.at(1).get<double>();
+        }
+    }
+    t.rotate_rad = j.value("rotate_rad", 0.0);
+    t.scale      = j.value("scale", 1.0);
+    t.mirror_x   = j.value("mirror_x", false);
+    t.mirror_y   = j.value("mirror_y", false);
+}
+
+inline void layer_to_json(nlohmann::json& j, const Layer& l) {
+    j["name"] = l.name;
+    generator_to_json(j["generator"] = nlohmann::json::object(), l.generator);
+    style_to_json(j["style"] = nlohmann::json::object(), l.style);
+    transform_to_json(j["transform"] = nlohmann::json::object(), l.transform);
+    j["visible"] = l.visible;
+}
+
+inline void layer_from_json(const nlohmann::json& j, Layer& l) {
+    l.name = j.value("name", std::string{});
+    generator_from_json(j.at("generator"), l.generator);
+    style_from_json(j.at("style"), l.style);
+    if (j.contains("transform")) transform_from_json(j.at("transform"), l.transform);
+    l.visible = j.value("visible", true);
+}
+
 }  // namespace detail
 
 // ---------------------------------------------------------------------------
-// nlohmann/json ADL hooks
+// nlohmann/json ADL hooks for Preset
 
 inline void to_json(nlohmann::json& j, const Preset& p) {
     j = nlohmann::json::object();
     j["version"] = p.version;
     j["name"] = p.name;
 
-    auto& g = j["generator"];
-    g["type"] = detail::generator_type_to_string(p.generator.type);
-    auto& gp = g["params"] = nlohmann::json::object();
-    switch (p.generator.type) {
-        case GeneratorType::ModularChord:
-            gp["N"] = p.generator.chord.N;
-            gp["k"] = p.generator.chord.k;
-            break;
-        case GeneratorType::Hypotrochoid:
-            gp["R"] = p.generator.hypo.R;
-            gp["r"] = p.generator.hypo.r;
-            gp["d"] = p.generator.hypo.d;
-            gp["samples"] = p.generator.hypo.samples;
-            break;
-        case GeneratorType::Epitrochoid:
-            gp["R"] = p.generator.epi.R;
-            gp["r"] = p.generator.epi.r;
-            gp["d"] = p.generator.epi.d;
-            gp["samples"] = p.generator.epi.samples;
-            break;
-        case GeneratorType::Lissajous:
-            gp["A"] = p.generator.liss.A;
-            gp["B"] = p.generator.liss.B;
-            gp["a"] = p.generator.liss.a;
-            gp["b"] = p.generator.liss.b;
-            gp["phi"] = p.generator.liss.phi;
-            gp["samples"] = p.generator.liss.samples;
-            break;
+    auto& sc = j["scene"] = nlohmann::json::object();
+    sc["background"] = detail::color_to_hex(p.scene.background);
+    auto& layers = sc["layers"] = nlohmann::json::array();
+    for (const auto& l : p.scene.layers) {
+        nlohmann::json lj = nlohmann::json::object();
+        detail::layer_to_json(lj, l);
+        layers.push_back(std::move(lj));
     }
 
-    auto& s = j["style"];
-    auto& cm = s["color_map"] = nlohmann::json::object();
-    cm["type"] = detail::colormap_type_to_string(p.style.colormap_type);
-    switch (p.style.colormap_type) {
-        case ColorMapType::Solid:
-            cm["color"] = detail::color_to_hex(p.style.solid_color);
-            break;
-        case ColorMapType::LinearGradient:
-            cm["start"] = detail::color_to_hex(p.style.gradient_start);
-            cm["end"]   = detail::color_to_hex(p.style.gradient_end);
-            break;
-        case ColorMapType::HsvSweep:
-            cm["hue_start"]  = p.style.hue_start;
-            cm["hue_end"]    = p.style.hue_end;
-            cm["saturation"] = p.style.hsv_saturation;
-            cm["value"]      = p.style.hsv_value;
-            break;
-        case ColorMapType::Diverging:
-            cm["negative"] = detail::color_to_hex(p.style.div_negative);
-            cm["midpoint"] = detail::color_to_hex(p.style.div_midpoint);
-            cm["positive"] = detail::color_to_hex(p.style.div_positive);
-            break;
-    }
-    s["color_indexer"] = detail::indexer_to_string(p.style.color_indexer);
-    auto& stroke = s["stroke"] = nlohmann::json::object();
-    stroke["width_min"]     = p.style.stroke_width_min;
-    stroke["width_max"]     = p.style.stroke_width_max;
-    stroke["width_indexer"] = detail::indexer_to_string(p.style.stroke_width_indexer);
-    stroke["opacity"]       = p.style.opacity;
-    s["background"] = detail::color_to_hex(p.style.background);
-    s["cyclic"] = p.style.cyclic;
-
-    auto& c = j["camera"];
+    auto& c = j["camera"] = nlohmann::json::object();
     c["pan_x_px"] = p.camera.pan_x_px;
     c["pan_y_px"] = p.camera.pan_y_px;
-    c["zoom"] = p.camera.zoom;
+    c["zoom"]     = p.camera.zoom;
 }
 
 inline void from_json(const nlohmann::json& j, Preset& p) {
     p.version = j.at("version").get<int>();
-    if (p.version != 1) {
+    if (p.version != 1 && p.version != 2) {
         throw std::runtime_error("unsupported preset version " + std::to_string(p.version));
     }
     p.name = j.value("name", std::string{});
+    p.scene.layers.clear();
 
-    const auto& g = j.at("generator");
-    p.generator.type = detail::generator_type_from_string(g.at("type").get<std::string>());
-    const auto& gp = g.at("params");
-    switch (p.generator.type) {
-        case GeneratorType::ModularChord:
-            p.generator.chord.N = gp.value("N", p.generator.chord.N);
-            p.generator.chord.k = gp.value("k", p.generator.chord.k);
-            break;
-        case GeneratorType::Hypotrochoid:
-            p.generator.hypo.R       = gp.value("R", p.generator.hypo.R);
-            p.generator.hypo.r       = gp.value("r", p.generator.hypo.r);
-            p.generator.hypo.d       = gp.value("d", p.generator.hypo.d);
-            p.generator.hypo.samples = gp.value("samples", p.generator.hypo.samples);
-            break;
-        case GeneratorType::Epitrochoid:
-            p.generator.epi.R       = gp.value("R", p.generator.epi.R);
-            p.generator.epi.r       = gp.value("r", p.generator.epi.r);
-            p.generator.epi.d       = gp.value("d", p.generator.epi.d);
-            p.generator.epi.samples = gp.value("samples", p.generator.epi.samples);
-            break;
-        case GeneratorType::Lissajous:
-            p.generator.liss.A       = gp.value("A", p.generator.liss.A);
-            p.generator.liss.B       = gp.value("B", p.generator.liss.B);
-            p.generator.liss.a       = gp.value("a", p.generator.liss.a);
-            p.generator.liss.b       = gp.value("b", p.generator.liss.b);
-            p.generator.liss.phi     = gp.value("phi", p.generator.liss.phi);
-            p.generator.liss.samples = gp.value("samples", p.generator.liss.samples);
-            break;
+    if (p.version == 1) {
+        // v1 → v2 auto-promote: the top-level generator + style become a single
+        // layer with identity transform. v1's style.background moves to
+        // scene.background.
+        Layer layer;
+        layer.name = "layer 0";
+        detail::generator_from_json(j.at("generator"), layer.generator);
+        const auto& s = j.at("style");
+        detail::style_from_json(s, layer.style);
+        p.scene.background = detail::color_from_hex(
+            s.value("background", std::string("#0a0a0a")));
+        p.scene.layers.push_back(std::move(layer));
+        p.version = 2;  // upgrade in memory
+    } else {
+        // v2 native
+        const auto& sc = j.at("scene");
+        p.scene.background = detail::color_from_hex(
+            sc.value("background", std::string("#0a0a0a")));
+        if (sc.contains("layers")) {
+            for (const auto& lj : sc.at("layers")) {
+                Layer l;
+                detail::layer_from_json(lj, l);
+                p.scene.layers.push_back(std::move(l));
+            }
+        }
     }
 
-    const auto& s = j.at("style");
-    const auto& cm = s.at("color_map");
-    p.style.colormap_type = detail::colormap_type_from_string(cm.at("type").get<std::string>());
-    switch (p.style.colormap_type) {
-        case ColorMapType::Solid:
-            p.style.solid_color = detail::color_from_hex(cm.at("color").get<std::string>());
-            break;
-        case ColorMapType::LinearGradient:
-            p.style.gradient_start = detail::color_from_hex(cm.at("start").get<std::string>());
-            p.style.gradient_end   = detail::color_from_hex(cm.at("end").get<std::string>());
-            break;
-        case ColorMapType::HsvSweep:
-            p.style.hue_start      = cm.value("hue_start", p.style.hue_start);
-            p.style.hue_end        = cm.value("hue_end",   p.style.hue_end);
-            p.style.hsv_saturation = cm.value("saturation", p.style.hsv_saturation);
-            p.style.hsv_value      = cm.value("value",      p.style.hsv_value);
-            break;
-        case ColorMapType::Diverging:
-            p.style.div_negative = detail::color_from_hex(cm.at("negative").get<std::string>());
-            p.style.div_midpoint = detail::color_from_hex(cm.at("midpoint").get<std::string>());
-            p.style.div_positive = detail::color_from_hex(cm.at("positive").get<std::string>());
-            break;
+    if (p.scene.layers.empty()) {
+        // Always at least one layer in memory so the UI has something to edit.
+        p.scene.layers.push_back(Layer{});
+        p.scene.layers.back().name = "layer 0";
     }
-    p.style.color_indexer = detail::indexer_from_string(s.at("color_indexer").get<std::string>());
-    const auto& stroke = s.at("stroke");
-    p.style.stroke_width_min = stroke.value("width_min", p.style.stroke_width_min);
-    p.style.stroke_width_max = stroke.value("width_max", p.style.stroke_width_max);
-    p.style.stroke_width_indexer = detail::indexer_from_string(
-        stroke.value("width_indexer", std::string("by_chord_index")));
-    p.style.opacity = stroke.value("opacity", p.style.opacity);
-    p.style.background = detail::color_from_hex(s.value("background", std::string("#0a0a0a")));
-    p.style.cyclic = s.value("cyclic", p.style.cyclic);
 
     if (j.contains("camera")) {
         const auto& c = j.at("camera");
@@ -246,7 +331,7 @@ inline void from_json(const nlohmann::json& j, Preset& p) {
 }
 
 // ---------------------------------------------------------------------------
-// File I/O
+// File I/O + XDG path
 
 inline void save_preset(const std::filesystem::path& path, const Preset& p) {
     if (path.has_parent_path()) {
@@ -269,7 +354,6 @@ inline Preset load_preset(const std::filesystem::path& path) {
     return p;
 }
 
-// XDG: $XDG_CONFIG_HOME/caustic/presets, falling back to $HOME/.config/...
 inline std::filesystem::path user_preset_dir() {
     if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg) {
         return std::filesystem::path(xdg) / "caustic" / "presets";

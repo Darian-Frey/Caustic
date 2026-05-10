@@ -25,20 +25,20 @@ bool color_close(Color a, Color b, double eps = 0.005) {
 Preset make_modular_preset() {
     Preset p;
     p.name = "test_modular";
-    p.generator.type = GeneratorType::ModularChord;
-    p.generator.chord = {200, 2.5};
-    p.style.colormap_type = ColorMapType::HsvSweep;
-    p.style.hue_start = 10.0;
-    p.style.hue_end = 350.0;
-    p.style.hsv_saturation = 0.7;
-    p.style.hsv_value = 0.9;
-    p.style.color_indexer = Indexer::ChordLength;
-    p.style.stroke_width_min = 0.5;
-    p.style.stroke_width_max = 1.5;
-    p.style.stroke_width_indexer = Indexer::Angle;
-    p.style.opacity = 0.7;
-    p.style.background = {0.05, 0.05, 0.10, 1.0};
-    p.style.cyclic = false;
+    p.scene.layers[0].generator.type = GeneratorType::ModularChord;
+    p.scene.layers[0].generator.chord = {200, 2.5};
+    p.scene.layers[0].style.colormap_type = ColorMapType::HsvSweep;
+    p.scene.layers[0].style.hue_start = 10.0;
+    p.scene.layers[0].style.hue_end = 350.0;
+    p.scene.layers[0].style.hsv_saturation = 0.7;
+    p.scene.layers[0].style.hsv_value = 0.9;
+    p.scene.layers[0].style.color_indexer = Indexer::ChordLength;
+    p.scene.layers[0].style.stroke_width_min = 0.5;
+    p.scene.layers[0].style.stroke_width_max = 1.5;
+    p.scene.layers[0].style.stroke_width_indexer = Indexer::Angle;
+    p.scene.layers[0].style.opacity = 0.7;
+    p.scene.background = {0.05, 0.05, 0.10, 1.0};
+    p.scene.layers[0].style.cyclic = false;
     p.camera = {12.5, -7.0, 1.4};
     return p;
 }
@@ -89,18 +89,18 @@ TEST_CASE("Preset round-trips through JSON for modular_chord + HsvSweep") {
 
     CHECK(back.version == original.version);
     CHECK(back.name == original.name);
-    CHECK(back.generator.type == GeneratorType::ModularChord);
-    CHECK(back.generator.chord.N == original.generator.chord.N);
-    CHECK(back.generator.chord.k == original.generator.chord.k);
-    CHECK(back.style.colormap_type == ColorMapType::HsvSweep);
-    CHECK(back.style.hue_start == original.style.hue_start);
-    CHECK(back.style.hue_end == original.style.hue_end);
-    CHECK(back.style.color_indexer == Indexer::ChordLength);
-    CHECK(back.style.stroke_width_min == original.style.stroke_width_min);
-    CHECK(back.style.stroke_width_max == original.style.stroke_width_max);
-    CHECK(back.style.stroke_width_indexer == Indexer::Angle);
-    CHECK(back.style.opacity == original.style.opacity);
-    CHECK(color_close(back.style.background, original.style.background));
+    CHECK(back.scene.layers[0].generator.type == GeneratorType::ModularChord);
+    CHECK(back.scene.layers[0].generator.chord.N == original.scene.layers[0].generator.chord.N);
+    CHECK(back.scene.layers[0].generator.chord.k == original.scene.layers[0].generator.chord.k);
+    CHECK(back.scene.layers[0].style.colormap_type == ColorMapType::HsvSweep);
+    CHECK(back.scene.layers[0].style.hue_start == original.scene.layers[0].style.hue_start);
+    CHECK(back.scene.layers[0].style.hue_end == original.scene.layers[0].style.hue_end);
+    CHECK(back.scene.layers[0].style.color_indexer == Indexer::ChordLength);
+    CHECK(back.scene.layers[0].style.stroke_width_min == original.scene.layers[0].style.stroke_width_min);
+    CHECK(back.scene.layers[0].style.stroke_width_max == original.scene.layers[0].style.stroke_width_max);
+    CHECK(back.scene.layers[0].style.stroke_width_indexer == Indexer::Angle);
+    CHECK(back.scene.layers[0].style.opacity == original.scene.layers[0].style.opacity);
+    CHECK(color_close(back.scene.background, original.scene.background));
     CHECK(back.camera.pan_x_px == original.camera.pan_x_px);
     CHECK(back.camera.pan_y_px == original.camera.pan_y_px);
     CHECK(back.camera.zoom == original.camera.zoom);
@@ -109,65 +109,65 @@ TEST_CASE("Preset round-trips through JSON for modular_chord + HsvSweep") {
 TEST_CASE("Preset round-trips for hypotrochoid + LinearGradient") {
     Preset p;
     p.name = "spiro";
-    p.generator.type = GeneratorType::Hypotrochoid;
-    p.generator.hypo = {5.0, 3.0, 2.0, 4000};
-    p.style.colormap_type = ColorMapType::LinearGradient;
-    p.style.gradient_start = {0.10, 0.27, 0.50, 1.0};
-    p.style.gradient_end   = {0.94, 0.75, 0.31, 1.0};
-    p.style.cyclic = true;
+    p.scene.layers[0].generator.type = GeneratorType::Hypotrochoid;
+    p.scene.layers[0].generator.hypo = {5.0, 3.0, 2.0, 4000};
+    p.scene.layers[0].style.colormap_type = ColorMapType::LinearGradient;
+    p.scene.layers[0].style.gradient_start = {0.10, 0.27, 0.50, 1.0};
+    p.scene.layers[0].style.gradient_end   = {0.94, 0.75, 0.31, 1.0};
+    p.scene.layers[0].style.cyclic = true;
 
     json j;
     to_json(j, p);
     Preset back;
     from_json(j, back);
 
-    CHECK(back.generator.type == GeneratorType::Hypotrochoid);
-    CHECK(back.generator.hypo.R == 5.0);
-    CHECK(back.generator.hypo.r == 3.0);
-    CHECK(back.generator.hypo.d == 2.0);
-    CHECK(back.generator.hypo.samples == 4000);
-    CHECK(back.style.colormap_type == ColorMapType::LinearGradient);
-    CHECK(color_close(back.style.gradient_start, p.style.gradient_start));
-    CHECK(color_close(back.style.gradient_end,   p.style.gradient_end));
-    CHECK(back.style.cyclic == true);
+    CHECK(back.scene.layers[0].generator.type == GeneratorType::Hypotrochoid);
+    CHECK(back.scene.layers[0].generator.hypo.R == 5.0);
+    CHECK(back.scene.layers[0].generator.hypo.r == 3.0);
+    CHECK(back.scene.layers[0].generator.hypo.d == 2.0);
+    CHECK(back.scene.layers[0].generator.hypo.samples == 4000);
+    CHECK(back.scene.layers[0].style.colormap_type == ColorMapType::LinearGradient);
+    CHECK(color_close(back.scene.layers[0].style.gradient_start, p.scene.layers[0].style.gradient_start));
+    CHECK(color_close(back.scene.layers[0].style.gradient_end,   p.scene.layers[0].style.gradient_end));
+    CHECK(back.scene.layers[0].style.cyclic == true);
 }
 
 TEST_CASE("Preset round-trips for Lissajous + Diverging") {
     Preset p;
     p.name = "bowtie";
-    p.generator.type = GeneratorType::Lissajous;
-    p.generator.liss = {1.0, 1.0, 1.0, 2.0, 1.5707963267948966, 4000};
-    p.style.colormap_type = ColorMapType::Diverging;
-    p.style.div_negative = {0.95, 0.55, 0.20, 1.0};
-    p.style.div_midpoint = {0.95, 0.95, 0.95, 1.0};
-    p.style.div_positive = {0.20, 0.70, 0.85, 1.0};
+    p.scene.layers[0].generator.type = GeneratorType::Lissajous;
+    p.scene.layers[0].generator.liss = {1.0, 1.0, 1.0, 2.0, 1.5707963267948966, 4000};
+    p.scene.layers[0].style.colormap_type = ColorMapType::Diverging;
+    p.scene.layers[0].style.div_negative = {0.95, 0.55, 0.20, 1.0};
+    p.scene.layers[0].style.div_midpoint = {0.95, 0.95, 0.95, 1.0};
+    p.scene.layers[0].style.div_positive = {0.20, 0.70, 0.85, 1.0};
 
     json j;
     to_json(j, p);
     Preset back;
     from_json(j, back);
 
-    CHECK(back.generator.liss.a == 1.0);
-    CHECK(back.generator.liss.b == 2.0);
-    CHECK(back.style.colormap_type == ColorMapType::Diverging);
-    CHECK(color_close(back.style.div_negative, p.style.div_negative));
-    CHECK(color_close(back.style.div_midpoint, p.style.div_midpoint));
-    CHECK(color_close(back.style.div_positive, p.style.div_positive));
+    CHECK(back.scene.layers[0].generator.liss.a == 1.0);
+    CHECK(back.scene.layers[0].generator.liss.b == 2.0);
+    CHECK(back.scene.layers[0].style.colormap_type == ColorMapType::Diverging);
+    CHECK(color_close(back.scene.layers[0].style.div_negative, p.scene.layers[0].style.div_negative));
+    CHECK(color_close(back.scene.layers[0].style.div_midpoint, p.scene.layers[0].style.div_midpoint));
+    CHECK(color_close(back.scene.layers[0].style.div_positive, p.scene.layers[0].style.div_positive));
 }
 
 TEST_CASE("Preset round-trips for Solid colormap") {
     Preset p;
-    p.generator.type = GeneratorType::Epitrochoid;
-    p.generator.epi = {3.0, 1.0, 1.5, 4000};
-    p.style.colormap_type = ColorMapType::Solid;
-    p.style.solid_color = {0.5, 0.7, 0.3, 1.0};
+    p.scene.layers[0].generator.type = GeneratorType::Epitrochoid;
+    p.scene.layers[0].generator.epi = {3.0, 1.0, 1.5, 4000};
+    p.scene.layers[0].style.colormap_type = ColorMapType::Solid;
+    p.scene.layers[0].style.solid_color = {0.5, 0.7, 0.3, 1.0};
 
     json j;
     to_json(j, p);
     Preset back;
     from_json(j, back);
-    CHECK(back.style.colormap_type == ColorMapType::Solid);
-    CHECK(color_close(back.style.solid_color, p.style.solid_color));
+    CHECK(back.scene.layers[0].style.colormap_type == ColorMapType::Solid);
+    CHECK(color_close(back.scene.layers[0].style.solid_color, p.scene.layers[0].style.solid_color));
 }
 
 TEST_CASE("from_json rejects unknown version") {
@@ -196,8 +196,8 @@ TEST_CASE("save_preset and load_preset round-trip on disk") {
     REQUIRE(fs::exists(tmp));
     const Preset back = load_preset(tmp);
     CHECK(back.name == original.name);
-    CHECK(back.generator.chord.N == original.generator.chord.N);
-    CHECK(back.generator.chord.k == original.generator.chord.k);
+    CHECK(back.scene.layers[0].generator.chord.N == original.scene.layers[0].generator.chord.N);
+    CHECK(back.scene.layers[0].generator.chord.k == original.scene.layers[0].generator.chord.k);
 
     fs::remove(tmp);
 }
@@ -226,8 +226,12 @@ TEST_CASE("bundled preset files parse cleanly") {
     for (const auto& entry : fs::directory_iterator(dir)) {
         if (entry.path().extension() != ".json") continue;
         Preset p = load_preset(entry.path());
-        CHECK(p.version == 1);
+        // After auto-promote, every loaded preset is v2 in memory regardless
+        // of the on-disk version. The bundled set is still on-disk v1 today
+        // and will be migrated to v2 in a follow-up commit.
+        CHECK(p.version == 2);
         CHECK_FALSE(p.name.empty());
+        CHECK_FALSE(p.scene.layers.empty());
         parsed++;
     }
     CHECK(parsed >= 5);

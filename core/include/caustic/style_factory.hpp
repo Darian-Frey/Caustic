@@ -28,7 +28,6 @@ inline Style style_from_spec(const StyleSpec& spec) {
     }
     s.color_indexer = spec.color_indexer;
     s.stroke = {spec.stroke_width_min, spec.stroke_width_max, spec.stroke_width_indexer, spec.opacity};
-    s.background = spec.background;
     s.cyclic = spec.cyclic;
     return s;
 }
