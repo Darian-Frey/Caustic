@@ -6,7 +6,7 @@ Caustic is a C++20 desktop studio for generative geometric art — chord pattern
 
 ## Current state
 
-**Phases 0–6 complete (2026-05-10); Phase 7 next.** All four v1 generators, full style system (colormaps, indexers, stroke modulation, cyclic remap), the rlImGui UI, preset save/load, and SVG export are live. `render/` is split: `caustic-render-svg` builds with zero raylib dependency (verified via `CAUSTIC_BUILD_APP=OFF`); `caustic-render-raylib` only builds for the GUI. SVG export writes deterministic 6-decimal output with plotter mode, accessible via the Presets panel. Build green, 64 doctest cases passing.
+**v1 functionally complete (Phases 0–7, 2026-05-10).** Four generators (modular chord + three roulettes), full style system, rlImGui UI with live editing + scroll-wheel modifiers + coarse drag preview + camera (pan/zoom/fullscreen), preset save/load to XDG dir, SVG export with plotter mode, and a headless `caustic-cli`. `render/` is split into `caustic-render-svg` (no raylib, always built) and `caustic-render-raylib` (gated on `CAUSTIC_BUILD_APP`). Shared `caustic::geometry_from_spec` / `caustic::style_from_spec` factories let the CLI consume the same code paths as the GUI without pulling raylib in. CI on every push runs full + headless builds + batch SVG render. Build green, 64 doctest cases + 10 CLI CTest smoke cases passing.
 
 Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui `Raylib_6_0`, Dear ImGui v1.92.7, nlohmann/json v3.11.3, doctest v2.4.11. rlImGui's `Raylib_*` tags name the matching raylib release — bump in lockstep.
 
@@ -14,11 +14,19 @@ Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui 
 
 **Phase 5 deviation worth remembering:** `Preset.camera` stores pan as screen pixels (`pan_x_px`, `pan_y_px`) + zoom. SPEC has been updated to match the implementation. Not strictly portable across canvas sizes.
 
-**Phase 6 deviation worth remembering:** Douglas–Peucker simplification is documented in SPEC.md §5 and plumbed through `SvgOptions::simplify_epsilon` but not yet applied; deferred until file size becomes a real concern. Coloured polyline exports therefore emit one `<line>` per segment — ~4000 lines for the default samples. Plotter-mode chord sorting is lexicographic-by-start-point, not true nearest-neighbour.
+**Phase 6 deviation worth remembering:** Douglas–Peucker simplification is documented in SPEC.md §5 and plumbed through `SvgOptions::simplify_epsilon` (and the `--simplify` CLI flag) but not yet applied. Coloured polyline exports emit one `<line>` per segment — ~4000 lines for the default samples. Plotter-mode chord sorting is lexicographic-by-start-point, not true nearest-neighbour.
 
 ## Active task
 
-**Phase 7 — CLI tool.** See ROADMAP.md for deliverables. `caustic-cli preset.json -o out.svg` interface with `--width`, `--height`, `--margin`, `--plotter`, `--simplify` flags (SPEC.md §5 is authoritative). The CLI links only `caustic::core` + `caustic::render-svg` — no raylib, no rlImGui. Use a headless build (`CAUSTIC_BUILD_APP=OFF`) to verify the invariant. CI smoke test: render every bundled preset, verify non-empty valid SVG output. Acceptance per ROADMAP: builds and runs on a headless Linux container with no display server; batch-renders all bundled presets under 30 seconds total.
+**v1 is functionally complete; pick the next move.** Three roughly-independent v1.1 expansion phases plus one release phase, any order:
+
+- **Phase 8** — Animation system (parameter envelopes over time, frame export)
+- **Phase 9** — Parametric curve expansion + hybrid mode (rose / Maurer rose / superformula / phyllotaxis + multi-layer composition)
+- **Phase 10** — String-art expansion (`PolygonCurve` + `LinearEnvelope` — the patterns the user flagged in image review)
+- **Phase 11** — Strange attractors (Clifford / de Jong / Tinkerbell — new iterative-orbit pipeline tier)
+- **Phase 12** — Polish & release (bundled preset gallery, GIFs, Windows cross-compile, itch.io page) — the path to public 1.0
+
+Phase 10 is the most user-visible feature gap (Caustic is literally named after the envelope curves these patterns produce); Phase 12 is the shortest path to a shippable 1.0 if the v1 feature set is enough. Confirm with user before starting.
 
 ## Invariants
 

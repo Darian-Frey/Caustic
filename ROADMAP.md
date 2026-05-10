@@ -123,18 +123,22 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 7 — CLI tool
+## Phase 7 — CLI tool *(complete, 2026-05-10)*
 
 **Goal:** Headless batch generation.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] `caustic-cli preset.json -o out.svg` interface
-- [ ] `--width`, `--height`, `--margin`, `--plotter`, `--simplify` flags
-- [ ] CLI links only `core/` + `render/svg_renderer` (no raylib, no rlImGui)
-- [ ] CI smoke test: render every bundled preset, verify non-empty valid SVG output
+- [x] `caustic-cli preset.json -o out.svg` interface with SPEC.md §5 exit codes (0 success / 1 args / 2 file-not-found / 3 validation / 4 write-failed)
+- [x] `--width`, `--height`, `--margin`, `--plotter`, `--simplify` flags (`--simplify` is plumbed through `SvgOptions::simplify_epsilon` but currently a no-op pending the Phase 6 Douglas–Peucker deferral)
+- [x] CLI links only `caustic::core` + `caustic::render-svg`; verified by configuring with `CAUSTIC_BUILD_APP=OFF` and asserting no `libraylib*` artifacts in the build tree
+- [x] CTest smoke suite: `cli_version`, `cli_help`, `cli_missing_args` (exit 1), `cli_file_not_found` (exit 2), per-preset render tests for all 5 bundled presets, plus a plotter-mode render
+- [x] GitHub Actions workflow at `.github/workflows/ci.yml` with three jobs: full build (raylib + tests), headless build (no raylib + tests + raylib-absence guard), and a batch render that uploads bundled SVGs as a workflow artifact
+- [x] Shared geometry/style factories landed in `core/include/caustic/{geometry,style}_factory.hpp` so app and CLI no longer duplicate the spec→runtime construction code
 
-**Acceptance:** `caustic-cli` builds and runs on a headless Linux container with no display server. Batch script renders all 20+ bundled presets in under 30 seconds total.
+**Acceptance:** Local batch render of all 5 bundled presets completes in **48 ms wall-clock** (well under the 30 s target). Both build modes green, 11/11 CTest cases pass in each.
+
+**v1 milestone:** with Phase 7 done, Caustic has all the v1-scope deliverables — four generators, full style system, rlImGui UI with live editing, preset save/load, SVG export, and a headless CLI. Phases 8–11 are v1.1 expansions (user-prioritized order); Phase 12 is the path to a public 1.0 release.
 
 ---
 
