@@ -40,18 +40,18 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 2 — Roulettes & Lissajous
+## Phase 2 — Roulettes & Lissajous *(complete, 2026-05-10)*
 
 **Goal:** All four v1 generators implemented and selectable.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] `HypotrochoidCurve`, `EpitrochoidCurve`, `LissajousCurve` in `core/`
-- [ ] Curve sampler producing polylines with adaptive density
-- [ ] Generator selector (hardcoded toggle key for now — full UI comes in Phase 4)
-- [ ] Each generator covered by a doctest verifying known special cases (e.g. `R=2r, d=r` gives a straight line for hypotrochoid)
+- [x] `HypotrochoidCurve`, `EpitrochoidCurve`, `LissajousCurve` in `core/`
+- [x] Curve sampler producing polylines (uniform density; adaptive density deferred — uniform is fine for SPEC defaults)
+- [x] Generator selector (number-key toggle 1–4 in app — full UI comes in Phase 4)
+- [x] Doctest cases for each generator's known special cases (Tusi couple, cardioid cusp, y=x line, bowtie)
 
-**Acceptance:** All four generators render correctly; hypotrochoid with `R=5, r=3, d=2` matches the canonical Spirograph pattern; Lissajous `1:2` produces a bowtie figure.
+**Acceptance:** All four generators render; hypotrochoid R=5, r=3, d=2 produces the 5-petal Spirograph rosette; Lissajous 1:2 produces the bowtie. `GeometryBuffer` introduced as the union of polylines + chords; renderer fit-to-content scaling auto-sizes each generator.
 
 ---
 

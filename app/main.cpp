@@ -1,11 +1,14 @@
+#include <memory>
 #include <numbers>
 
+#include <caustic/colormap.hpp>
 #include <caustic/generators/epitrochoid.hpp>
 #include <caustic/generators/hypotrochoid.hpp>
 #include <caustic/generators/lissajous.hpp>
 #include <caustic/generators/modular_chord.hpp>
 #include <caustic/geometry_buffer.hpp>
 #include <caustic/sampler.hpp>
+#include <caustic/style.hpp>
 
 #include "raylib_renderer.hpp"
 
@@ -32,7 +35,7 @@ const char* name_of(Generator g) {
     return "?";
 }
 
-caustic::GeometryBuffer build(Generator g) {
+caustic::GeometryBuffer build_geometry(Generator g) {
     caustic::GeometryBuffer geo;
     switch (g) {
         case Generator::ModularChord:
@@ -55,6 +58,42 @@ caustic::GeometryBuffer build(Generator g) {
         }
     }
     return geo;
+}
+
+caustic::Style build_style(Generator g) {
+    caustic::Style s;
+    s.background = {0.04, 0.04, 0.04, 1.0};
+    switch (g) {
+        case Generator::ModularChord:
+            // Phase 3 acceptance demo: rainbow HsvSweep indexed by chord length.
+            s.color_map = std::make_shared<caustic::HsvSweep>(0.0, 360.0, 0.85, 0.95);
+            s.color_indexer = caustic::Indexer::ChordLength;
+            s.stroke = {0.8, 0.8, caustic::Indexer::ChordIndex, 0.6};
+            break;
+        case Generator::Hypotrochoid:
+            // Cool→warm gradient with chord-length width modulation.
+            s.color_map = std::make_shared<caustic::LinearGradient>(
+                caustic::Color{0.10, 0.27, 0.50}, caustic::Color{0.94, 0.75, 0.31});
+            s.color_indexer = caustic::Indexer::CurveT;
+            s.stroke = {1.0, 2.0, caustic::Indexer::ChordLength, 0.9};
+            break;
+        case Generator::Epitrochoid:
+            // Narrow-hue sweep keyed by segment angle.
+            s.color_map = std::make_shared<caustic::HsvSweep>(180.0, 260.0, 0.65, 0.9);
+            s.color_indexer = caustic::Indexer::Angle;
+            s.stroke = {1.2, 1.2, caustic::Indexer::ChordIndex, 0.85};
+            break;
+        case Generator::Lissajous:
+            // Diverging orange-white-cyan with width tapering along the curve.
+            s.color_map = std::make_shared<caustic::Diverging>(
+                caustic::Color{0.95, 0.55, 0.20},
+                caustic::Color{0.95, 0.95, 0.95},
+                caustic::Color{0.20, 0.70, 0.85});
+            s.color_indexer = caustic::Indexer::CurveT;
+            s.stroke = {1.0, 3.0, caustic::Indexer::CurveT, 0.95};
+            break;
+    }
+    return s;
 }
 
 }  // namespace
@@ -80,7 +119,7 @@ int main() {
         if (gen != prev) dirty = true;
 
         if (dirty) {
-            renderer.redraw(build(gen));
+            renderer.redraw(build_geometry(gen), build_style(gen));
             dirty = false;
         }
 
@@ -90,7 +129,7 @@ int main() {
 
         rlImGuiBegin();
         ImGui::Begin("Caustic");
-        ImGui::Text("Phase 2 — %s", name_of(gen));
+        ImGui::Text("Phase 3 — %s", name_of(gen));
         ImGui::Text("Press 1–4 to switch generator");
         ImGui::End();
         rlImGuiEnd();

@@ -6,13 +6,13 @@ Caustic is a C++20 desktop studio for generative geometric art — chord pattern
 
 ## Current state
 
-**Phase 0 complete (2026-05-10); Phase 1 in progress.** Repo on GitHub (`Darian-Frey/Caustic`). CMake workspace with `core/`, `render/`, `app/`, `cli/`, `tests/` is in place. Build green, ctest green, GUI launches. `presets/` not yet created (lands in Phase 5). `LICENSE` not present (deferred to Phase 10).
+**Phases 0–2 complete (2026-05-10); Phase 3 in progress.** All four v1 generators (modular chord, hypotrochoid, epitrochoid, Lissajous) are implemented as `ParametricCurve` subclasses (modular_chord is a free function returning `ChordSet`); `GeometryBuffer` unifies polylines + chords; `RaylibRenderer` blits onto a cached `RenderTexture2D`; dirty-flag rendering loop is established; app cycles generators via keys 1–4. Build green, 26 doctest cases passing.
 
 Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui `Raylib_6_0`, Dear ImGui v1.92.7, nlohmann/json v3.11.3, doctest v2.4.11. rlImGui's `Raylib_*` tags name the matching raylib release — bump in lockstep.
 
 ## Active task
 
-**Phase 1 — Modular chord MVP.** See ROADMAP.md for deliverables. Goal: cardioid (N=200, k=2) visible in the app, dirty-flag rendering loop established, idle CPU at rest. Acceptance is a visible figure on screen plus near-zero idle CPU when no parameter is moving.
+**Phase 3 — Style system.** See ROADMAP.md for deliverables. Add `ColorMap` interface (Solid, LinearGradient, HsvSweep, Diverging) + `Indexer` enum (ChordIndex, ChordLength, Angle, CurveT) + `StrokeStyle` (width modulation) + background. Acceptance: HsvSweep + by-chord-length on a modular chord renders a smooth rainbow gradient.
 
 ## Invariants
 

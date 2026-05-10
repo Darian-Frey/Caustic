@@ -7,6 +7,8 @@ add_executable(test_caustic
     test_hypotrochoid.cpp
     test_epitrochoid.cpp
     test_lissajous.cpp
+    test_color.cpp
+    test_indexer.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
