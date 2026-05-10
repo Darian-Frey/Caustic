@@ -6,20 +6,20 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 0 — Foundations
+## Phase 0 — Foundations *(complete, 2026-05-10)*
 
 **Goal:** Buildable workspace with all dependencies bootstrapped and a green test run.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] CMake workspace at repo root with four subprojects (`core/`, `render/`, `app/`, `cli/`)
-- [ ] `FetchContent` rules for raylib, rlImGui, nlohmann/json, doctest with pinned versions
-- [ ] `core/include/caustic/vec2.hpp` plus one passing doctest in `tests/`
-- [ ] `app/main.cpp` opens a 1280×800 black window with an empty ImGui frame
-- [ ] `cli/main.cpp` prints `caustic 0.1.0` and exits cleanly
-- [ ] `.gitignore`, `.editorconfig`, basic CI stub (optional but recommended)
+- [x] CMake workspace at repo root with four subprojects (`core/`, `render/`, `app/`, `cli/`)
+- [x] `FetchContent` rules for raylib (6.0), rlImGui (`Raylib_6_0`), Dear ImGui (v1.92.7), nlohmann/json (v3.11.3), doctest (v2.4.11)
+- [x] `core/include/caustic/vec2.hpp` plus passing doctest cases in `tests/`
+- [x] `app/main.cpp` opens a 1280×800 black window with an empty ImGui frame
+- [x] `cli/main.cpp` prints `caustic 0.1.0` and exits cleanly
+- [x] `.gitignore`, `.editorconfig` (CI stub deferred)
 
-**Acceptance:** `cmake --build build && ctest --test-dir build` is green; `./build/app/caustic` opens a window; `./build/cli/caustic-cli` prints version.
+**Acceptance:** `cmake --build build && ctest --test-dir build` green; `./build/app/caustic` opens a window; `./build/cli/caustic-cli` prints version.
 
 ---
 

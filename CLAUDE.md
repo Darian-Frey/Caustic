@@ -6,35 +6,13 @@ Caustic is a C++20 desktop studio for generative geometric art — chord pattern
 
 ## Current state
 
-**Pre-Phase 0.** Repo exists on GitHub (`Darian-Frey/Caustic`). Documentation scaffolding is in place:
+**Phase 0 complete (2026-05-10); Phase 1 in progress.** Repo on GitHub (`Darian-Frey/Caustic`). CMake workspace with `core/`, `render/`, `app/`, `cli/`, `tests/` is in place. Build green, ctest green, GUI launches. `presets/` not yet created (lands in Phase 5). `LICENSE` not present (deferred to Phase 10).
 
-- `README.md` — present
-- `ARCHITECTURE.md` — present, complete, all decisions resolved
-- `SPEC.md` — present
-- `ROADMAP.md` — present
-- `BUILD.md` — present
-- `CHANGELOG.md` — present
-- `LICENSE` — **not present** (deferred to Phase 10)
-
-No source code, no CMake setup yet. The following module directories do not exist:
-
-- `core/`
-- `render/`
-- `app/`
-- `cli/`
-- `tests/`
-- `presets/`
+Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui `Raylib_6_0`, Dear ImGui v1.92.7, nlohmann/json v3.11.3, doctest v2.4.11. rlImGui's `Raylib_*` tags name the matching raylib release — bump in lockstep.
 
 ## Active task
 
-**Phase 0 — Foundations.** See ROADMAP.md for full deliverables. Acceptance:
-
-1. CMake workspace with four subprojects: `core/`, `render/`, `app/`, `cli/`.
-2. `FetchContent` pulls raylib, rlImGui, nlohmann/json, doctest at known-compatible versions.
-3. `core/` has `vec2.hpp` with at least one passing doctest.
-4. `app/main.cpp` opens a 1280×800 black window with an empty ImGui frame.
-5. `cli/main.cpp` prints `caustic 0.1.0` and exits.
-6. `cmake --build build` succeeds; `ctest --test-dir build` is green.
+**Phase 1 — Modular chord MVP.** See ROADMAP.md for deliverables. Goal: cardioid (N=200, k=2) visible in the app, dirty-flag rendering loop established, idle CPU at rest. Acceptance is a visible figure on screen plus near-zero idle CPU when no parameter is moving.
 
 ## Invariants
 

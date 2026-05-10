@@ -4,6 +4,7 @@ project(caustic VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
@@ -43,17 +44,19 @@ if(CAUSTIC_BUILD_APP)
         FetchContent_Declare(
             raylib
             GIT_REPOSITORY https://github.com/raysan5/raylib.git
-            GIT_TAG 5.0
+            GIT_TAG 6.0
         )
         FetchContent_MakeAvailable(raylib)
     endif()
 
     # Dear ImGui ships no top-level CMakeLists.txt upstream; we build our own
-    # target from its source files.
+    # target from its source files. Pinned to v1.92.7 because rlImGui's
+    # Raylib_6_0 tag uses the v1.92 texture-manager APIs (GetPlatformIO,
+    # ImTextureData, ImGuiBackendFlags_RendererHasTextures).
     FetchContent_Declare(
         imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG v1.90.4
+        GIT_TAG v1.92.7
     )
     FetchContent_MakeAvailable(imgui)
     add_library(imgui STATIC
@@ -64,14 +67,13 @@ if(CAUSTIC_BUILD_APP)
     )
     target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
 
-    # rlImGui has no tagged releases — pinning to main is fragile. Bump to a
-    # specific commit hash known compatible with the chosen raylib tag once
-    # the first build cycle confirms one. CLAUDE.md flags this as a recurring
-    # pitfall: rlImGui and raylib must be bumped in lockstep.
+    # rlImGui pinned to its Raylib_6_0 tag — rlImGui ships tagged versions
+    # that name the raylib release they target. CLAUDE.md flags this as a
+    # recurring pitfall: rlImGui and raylib must be bumped in lockstep.
     FetchContent_Declare(
         rlimgui
         GIT_REPOSITORY https://github.com/raylib-extras/rlImGui.git
-        GIT_TAG main
+        GIT_TAG Raylib_6_0
     )
     FetchContent_GetProperties(rlimgui)
     if(NOT rlimgui_POPULATED)

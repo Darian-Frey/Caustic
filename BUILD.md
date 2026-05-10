@@ -45,13 +45,13 @@ All third-party libraries are pulled via CMake `FetchContent` at configure time.
 
 | Dependency | Pinned version | Purpose |
 |-----------|----------------|---------|
-| raylib | 5.0+ (TBD at Phase 0) | Window, input, rendering |
-| rlImGui | matching raylib version | Dear ImGui binding for raylib |
-| Dear ImGui | pulled by rlImGui | Immediate-mode UI |
-| nlohmann/json | 3.11+ | Preset serialisation |
-| doctest | 2.4+ | Unit tests |
+| raylib | 6.0 | Window, input, rendering |
+| rlImGui | `Raylib_6_0` tag (tracks the matching raylib release) | Dear ImGui binding for raylib |
+| Dear ImGui | v1.92.7 | Immediate-mode UI (compiled as our own target — upstream ships no CMakeLists) |
+| nlohmann/json | v3.11.3 | Preset serialisation |
+| doctest | v2.4.11 | Unit tests |
 
-Exact pinned versions land in the root `CMakeLists.txt` during Phase 0 and are recorded here once decided.
+rlImGui's `Raylib_6_0` tag uses ImGui v1.92's texture-manager APIs (`GetPlatformIO`, `ImTextureData`, `ImGuiBackendFlags_RendererHasTextures`); ImGui must be ≥ 1.92 for that tag to compile. rlImGui and raylib must be bumped in lockstep — see `Raylib_*` tags upstream.
 
 ## Build
 
