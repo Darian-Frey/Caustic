@@ -23,6 +23,8 @@ enum class GeneratorType {
     Rose,
     Superformula,
     Phyllotaxis,
+    PolygonChord,
+    LinearEnvelope,
 };
 
 struct ModularChordParams {
@@ -75,15 +77,36 @@ struct PhyllotaxisParams {
     double k = 2.0;                      // modular chord multiplier
 };
 
+struct PolygonChordParams {
+    int n_sides = 3;          // 3 = triangle, 4 = square, 5 = pentagon, ...
+    int N = 200;              // points sampled along the perimeter
+    double k = 2.0;           // modular chord multiplier
+    double rotation_rad = 0.0;
+};
+
+struct LinearEnvelopeParams {
+    // Default: perpendicular corner — vertical segment up from origin paired
+    // with horizontal segment right from origin. With k=1 this gives the
+    // canonical parabolic corner-fan envelope.
+    Vec2 a_start = {0.0, 0.0};
+    Vec2 a_end   = {0.0, 1.0};
+    Vec2 b_start = {0.0, 0.0};
+    Vec2 b_end   = {1.0, 0.0};
+    int N = 30;
+    double k = 1.0;
+};
+
 struct GeneratorSpec {
     GeneratorType type = GeneratorType::ModularChord;
-    ModularChordParams chord;
-    HypotrochoidParams hypo;
-    EpitrochoidParams  epi;
-    LissajousParams    liss;
-    RoseParams         rose;
-    SuperformulaParams supf;
-    PhyllotaxisParams  phyl;
+    ModularChordParams    chord;
+    HypotrochoidParams    hypo;
+    EpitrochoidParams     epi;
+    LissajousParams       liss;
+    RoseParams            rose;
+    SuperformulaParams    supf;
+    PhyllotaxisParams     phyl;
+    PolygonChordParams    poly;
+    LinearEnvelopeParams  lenv;
 };
 
 // ---------------------------------------------------------------------------

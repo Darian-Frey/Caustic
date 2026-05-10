@@ -55,25 +55,29 @@ inline Indexer indexer_from_string(const std::string& s) {
 
 inline std::string generator_type_to_string(GeneratorType t) {
     switch (t) {
-        case GeneratorType::ModularChord: return "modular_chord";
-        case GeneratorType::Hypotrochoid: return "hypotrochoid";
-        case GeneratorType::Epitrochoid:  return "epitrochoid";
-        case GeneratorType::Lissajous:    return "lissajous";
-        case GeneratorType::Rose:         return "rose";
-        case GeneratorType::Superformula: return "superformula";
-        case GeneratorType::Phyllotaxis:  return "phyllotaxis";
+        case GeneratorType::ModularChord:   return "modular_chord";
+        case GeneratorType::Hypotrochoid:   return "hypotrochoid";
+        case GeneratorType::Epitrochoid:    return "epitrochoid";
+        case GeneratorType::Lissajous:      return "lissajous";
+        case GeneratorType::Rose:           return "rose";
+        case GeneratorType::Superformula:   return "superformula";
+        case GeneratorType::Phyllotaxis:    return "phyllotaxis";
+        case GeneratorType::PolygonChord:   return "polygon_chord";
+        case GeneratorType::LinearEnvelope: return "linear_envelope";
     }
     return "modular_chord";
 }
 
 inline GeneratorType generator_type_from_string(const std::string& s) {
-    if (s == "modular_chord") return GeneratorType::ModularChord;
-    if (s == "hypotrochoid")  return GeneratorType::Hypotrochoid;
-    if (s == "epitrochoid")   return GeneratorType::Epitrochoid;
-    if (s == "lissajous")     return GeneratorType::Lissajous;
-    if (s == "rose")          return GeneratorType::Rose;
-    if (s == "superformula")  return GeneratorType::Superformula;
-    if (s == "phyllotaxis")   return GeneratorType::Phyllotaxis;
+    if (s == "modular_chord")   return GeneratorType::ModularChord;
+    if (s == "hypotrochoid")    return GeneratorType::Hypotrochoid;
+    if (s == "epitrochoid")     return GeneratorType::Epitrochoid;
+    if (s == "lissajous")       return GeneratorType::Lissajous;
+    if (s == "rose")            return GeneratorType::Rose;
+    if (s == "superformula")    return GeneratorType::Superformula;
+    if (s == "phyllotaxis")     return GeneratorType::Phyllotaxis;
+    if (s == "polygon_chord")   return GeneratorType::PolygonChord;
+    if (s == "linear_envelope") return GeneratorType::LinearEnvelope;
     throw std::runtime_error("unknown generator type: " + s);
 }
 
@@ -144,6 +148,20 @@ inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
             gp["alpha"] = gs.phyl.alpha;
             gp["k"] = gs.phyl.k;
             break;
+        case GeneratorType::PolygonChord:
+            gp["n_sides"] = gs.poly.n_sides;
+            gp["N"] = gs.poly.N;
+            gp["k"] = gs.poly.k;
+            gp["rotation_rad"] = gs.poly.rotation_rad;
+            break;
+        case GeneratorType::LinearEnvelope:
+            gp["a_start"] = nlohmann::json::array({gs.lenv.a_start.x, gs.lenv.a_start.y});
+            gp["a_end"]   = nlohmann::json::array({gs.lenv.a_end.x,   gs.lenv.a_end.y});
+            gp["b_start"] = nlohmann::json::array({gs.lenv.b_start.x, gs.lenv.b_start.y});
+            gp["b_end"]   = nlohmann::json::array({gs.lenv.b_end.x,   gs.lenv.b_end.y});
+            gp["N"] = gs.lenv.N;
+            gp["k"] = gs.lenv.k;
+            break;
     }
 }
 
@@ -194,6 +212,27 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
             gs.phyl.alpha = gp.value("alpha", gs.phyl.alpha);
             gs.phyl.k     = gp.value("k",     gs.phyl.k);
             break;
+        case GeneratorType::PolygonChord:
+            gs.poly.n_sides      = gp.value("n_sides",      gs.poly.n_sides);
+            gs.poly.N            = gp.value("N",            gs.poly.N);
+            gs.poly.k            = gp.value("k",            gs.poly.k);
+            gs.poly.rotation_rad = gp.value("rotation_rad", gs.poly.rotation_rad);
+            break;
+        case GeneratorType::LinearEnvelope: {
+            auto read_vec2 = [&](const char* key, Vec2 fallback) -> Vec2 {
+                if (gp.contains(key) && gp.at(key).is_array() && gp.at(key).size() == 2) {
+                    return {gp.at(key).at(0).get<double>(), gp.at(key).at(1).get<double>()};
+                }
+                return fallback;
+            };
+            gs.lenv.a_start = read_vec2("a_start", gs.lenv.a_start);
+            gs.lenv.a_end   = read_vec2("a_end",   gs.lenv.a_end);
+            gs.lenv.b_start = read_vec2("b_start", gs.lenv.b_start);
+            gs.lenv.b_end   = read_vec2("b_end",   gs.lenv.b_end);
+            gs.lenv.N       = gp.value("N", gs.lenv.N);
+            gs.lenv.k       = gp.value("k", gs.lenv.k);
+            break;
+        }
     }
 }
 

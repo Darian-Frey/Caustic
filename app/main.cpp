@@ -31,6 +31,7 @@ namespace {
 const char* const kGeneratorNames[] = {
     "modular chord", "hypotrochoid", "epitrochoid", "lissajous",
     "rose", "superformula", "phyllotaxis",
+    "polygon chord", "linear envelope",
 };
 
 const char* const kIndexerNames[] = {
@@ -243,6 +244,32 @@ void render_param_panel(AppState& state) {
             ImGui::SameLine(); if (ImGui::SmallButton("11")) snap_k(11.0);
             break;
         }
+        case caustic::GeneratorType::PolygonChord:
+            if (slider_int_w("n sides", &p.generator.poly.n_sides, 3, 12)) state.dirty = true;
+            if (slider_int_w("N",       &p.generator.poly.N,       3, 2000)) state.dirty = true;
+            if (slider_double_w("k",    &p.generator.poly.k,       0.0, 100.0, 0.01)) state.dirty = true;
+            if (slider_double_w("rotation", &p.generator.poly.rotation_rad,
+                                -std::numbers::pi, std::numbers::pi, 0.01)) state.dirty = true;
+            break;
+        case caustic::GeneratorType::LinearEnvelope: {
+            // Line endpoints exposed as SliderFloat2 pairs so each line is one
+            // widget. A future polish would let you drag the endpoints on the
+            // canvas itself; for now keyboard-friendly sliders.
+            auto edit_endpoint = [&](const char* label, caustic::Vec2& v) {
+                float xy[2] = {static_cast<float>(v.x), static_cast<float>(v.y)};
+                if (ImGui::SliderFloat2(label, xy, -3.0f, 3.0f, "%.3f")) {
+                    v = {xy[0], xy[1]};
+                    state.dirty = true;
+                }
+            };
+            edit_endpoint("a start", p.generator.lenv.a_start);
+            edit_endpoint("a end",   p.generator.lenv.a_end);
+            edit_endpoint("b start", p.generator.lenv.b_start);
+            edit_endpoint("b end",   p.generator.lenv.b_end);
+            if (slider_int_w("N",    &p.generator.lenv.N, 2, 500)) state.dirty = true;
+            if (slider_double_w("k", &p.generator.lenv.k, -100.0, 100.0, 0.1)) state.dirty = true;
+            break;
+        }
     }
 
     if (ImGui::Button("Reset generator params")) {
@@ -255,9 +282,11 @@ void render_param_panel(AppState& state) {
             case caustic::GeneratorType::Hypotrochoid: p.generator.hypo  = caustic::HypotrochoidParams{}; break;
             case caustic::GeneratorType::Epitrochoid:  p.generator.epi   = caustic::EpitrochoidParams{};  break;
             case caustic::GeneratorType::Lissajous:    p.generator.liss  = caustic::LissajousParams{};    break;
-            case caustic::GeneratorType::Rose:         p.generator.rose  = caustic::RoseParams{};         break;
-            case caustic::GeneratorType::Superformula: p.generator.supf  = caustic::SuperformulaParams{}; break;
-            case caustic::GeneratorType::Phyllotaxis:  p.generator.phyl  = caustic::PhyllotaxisParams{};  break;
+            case caustic::GeneratorType::Rose:           p.generator.rose = caustic::RoseParams{};           break;
+            case caustic::GeneratorType::Superformula:   p.generator.supf = caustic::SuperformulaParams{};   break;
+            case caustic::GeneratorType::Phyllotaxis:    p.generator.phyl = caustic::PhyllotaxisParams{};    break;
+            case caustic::GeneratorType::PolygonChord:   p.generator.poly = caustic::PolygonChordParams{};   break;
+            case caustic::GeneratorType::LinearEnvelope: p.generator.lenv = caustic::LinearEnvelopeParams{}; break;
         }
         state.dirty = true;
     }
