@@ -210,11 +210,56 @@ void render_param_panel(AppState& state) {
             if (slider_double_w("b",       &p.generator.supf.b,        0.1,   5.0,  0.01))         state.dirty = true;
             if (slider_int_w("samples",    &p.generator.supf.samples,  100, 100000))               state.dirty = true;
             break;
-        case caustic::GeneratorType::Phyllotaxis:
+        case caustic::GeneratorType::Phyllotaxis: {
+            // Phyllotaxis has a huge chaotic parameter space; almost all of it
+            // is mathematically valid but visually noisy. Snap buttons surface
+            // the aesthetically stable points (golden angle, n-spoke
+            // 2π/n divisions, small-integer k) so the user can find them
+            // without remembering exact values.
             if (slider_int_w("N",        &p.generator.phyl.N,     10, 5000)) state.dirty = true;
+
             if (slider_double_w("alpha", &p.generator.phyl.alpha, 0.0, 2.0 * std::numbers::pi, 0.0001, "%.5f")) state.dirty = true;
-            if (slider_double_w("k",     &p.generator.phyl.k,     0.0, 100.0, 0.01)) state.dirty = true;
+            const auto snap_alpha = [&](double a) {
+                p.generator.phyl.alpha = a;
+                state.dirty = true;
+            };
+            ImGui::Text("α snap:");
+            ImGui::SameLine(); if (ImGui::SmallButton("golden")) snap_alpha(2.39996322972865332);
+            ImGui::SameLine(); if (ImGui::SmallButton("2π/3"))   snap_alpha(2.0 * std::numbers::pi / 3.0);
+            ImGui::SameLine(); if (ImGui::SmallButton("2π/5"))   snap_alpha(2.0 * std::numbers::pi / 5.0);
+            ImGui::SameLine(); if (ImGui::SmallButton("2π/7"))   snap_alpha(2.0 * std::numbers::pi / 7.0);
+            ImGui::SameLine(); if (ImGui::SmallButton("π/2"))    snap_alpha(std::numbers::pi / 2.0);
+
+            if (slider_double_w("k", &p.generator.phyl.k, 0.0, 100.0, 0.01)) state.dirty = true;
+            const auto snap_k = [&](double v) {
+                p.generator.phyl.k = v;
+                state.dirty = true;
+            };
+            ImGui::Text("k snap:");
+            ImGui::SameLine(); if (ImGui::SmallButton("2"))  snap_k(2.0);
+            ImGui::SameLine(); if (ImGui::SmallButton("3"))  snap_k(3.0);
+            ImGui::SameLine(); if (ImGui::SmallButton("5"))  snap_k(5.0);
+            ImGui::SameLine(); if (ImGui::SmallButton("7"))  snap_k(7.0);
+            ImGui::SameLine(); if (ImGui::SmallButton("11")) snap_k(11.0);
             break;
+        }
+    }
+
+    if (ImGui::Button("Reset generator params")) {
+        // Reset only the active generator's params to their struct defaults,
+        // leaving other generators' configs alone. Useful for escaping a
+        // chaotic-looking corner of parameter space (e.g. phyllotaxis with
+        // non-golden α and large k).
+        switch (p.generator.type) {
+            case caustic::GeneratorType::ModularChord: p.generator.chord = caustic::ModularChordParams{}; break;
+            case caustic::GeneratorType::Hypotrochoid: p.generator.hypo  = caustic::HypotrochoidParams{}; break;
+            case caustic::GeneratorType::Epitrochoid:  p.generator.epi   = caustic::EpitrochoidParams{};  break;
+            case caustic::GeneratorType::Lissajous:    p.generator.liss  = caustic::LissajousParams{};    break;
+            case caustic::GeneratorType::Rose:         p.generator.rose  = caustic::RoseParams{};         break;
+            case caustic::GeneratorType::Superformula: p.generator.supf  = caustic::SuperformulaParams{}; break;
+            case caustic::GeneratorType::Phyllotaxis:  p.generator.phyl  = caustic::PhyllotaxisParams{};  break;
+        }
+        state.dirty = true;
     }
 
     ImGui::Separator();
@@ -281,6 +326,13 @@ void render_style_panel(AppState& state) {
 
     if (color_edit_double("background", &state.preset.scene.background)) state.dirty = true;
     if (ImGui::Checkbox("cyclic (closed-curve continuity)", &s.cyclic)) state.dirty = true;
+
+    if (ImGui::Button("Reset style")) {
+        // Resets the active layer's StyleSpec only. Scene-level background is
+        // not touched (it's shared across all layers).
+        state.current_layer().style = caustic::StyleSpec{};
+        state.dirty = true;
+    }
 
     ImGui::Separator();
     ImGui::TextDisabled("click any color square for hex/RGB/HSV input");
@@ -374,6 +426,16 @@ void render_layers_panel(AppState& state) {
     if (ImGui::Checkbox("mirror y", &t.mirror_y)) state.dirty = true;
     if (ImGui::Button("Reset transform")) {
         t = {};
+        state.dirty = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset layer")) {
+        // Wipe generator + style + transform back to defaults; keep the layer's
+        // name and visibility so the user's place in the layer list is preserved.
+        auto& L = state.current_layer();
+        L.generator = caustic::GeneratorSpec{};
+        L.style     = caustic::StyleSpec{};
+        L.transform = caustic::LayerTransform{};
         state.dirty = true;
     }
 
