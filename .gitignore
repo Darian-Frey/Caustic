@@ -35,3 +35,6 @@ compile_commands.json
 
 # Local config
 .envrc
+
+# Runtime-generated layout (rewrites on every window move)
+imgui.ini
