@@ -74,25 +74,25 @@ RaylibRenderer::~RaylibRenderer() {
     UnloadRenderTexture(canvas_);
 }
 
-void RaylibRenderer::redraw(const GeometryBuffer& geo, const Style& style) {
+void RaylibRenderer::redraw(const GeometryBuffer& geo, const Style& style, const CameraState& camera) {
     double extent = max_extent(geo);
     if (extent < 1e-9) extent = 1.0;
 
-    const double scale = std::min(width_, height_) * 0.45 / extent;
+    const double fit_scale = std::min(width_, height_) * 0.45 / extent;
+    const double scale = fit_scale * camera.zoom;
     const double cx = width_ / 2.0;
     const double cy = height_ / 2.0;
 
     auto to_screen = [&](Vec2 v) -> Vector2 {
         return {
-            static_cast<float>(cx + v.x * scale),
-            static_cast<float>(cy - v.y * scale),
+            static_cast<float>(cx + camera.pan_x_px + v.x * scale),
+            static_cast<float>(cy + camera.pan_y_px - v.y * scale),
         };
     };
 
     BeginTextureMode(canvas_);
     ClearBackground(to_raylib(style.background, 1.0));
 
-    // Chords
     if (!geo.chords.empty() && style.color_map) {
         const std::size_t N = geo.chords.size();
         const double max_len = max_chord_length(geo.chords);
@@ -106,7 +106,6 @@ void RaylibRenderer::redraw(const GeometryBuffer& geo, const Style& style) {
         }
     }
 
-    // Polylines
     if (style.color_map) {
         for (const auto& p : geo.polylines) {
             if (p.size() < 2) continue;

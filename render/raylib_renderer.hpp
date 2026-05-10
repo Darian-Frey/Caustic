@@ -1,5 +1,6 @@
 #pragma once
 
+#include <caustic/camera.hpp>
 #include <caustic/geometry_buffer.hpp>
 #include <caustic/style.hpp>
 
@@ -15,7 +16,7 @@ public:
     RaylibRenderer(const RaylibRenderer&) = delete;
     RaylibRenderer& operator=(const RaylibRenderer&) = delete;
 
-    void redraw(const GeometryBuffer& geo, const Style& style);
+    void redraw(const GeometryBuffer& geo, const Style& style, const CameraState& camera);
     void blit_to_screen() const;
 
 private:
