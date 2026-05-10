@@ -1,26 +1,41 @@
 {
-  "version": 1,
+  "version": 2,
   "name": "bowtie",
-  "generator": {
-    "type": "lissajous",
-    "params": { "A": 1.0, "B": 1.0, "a": 1.0, "b": 2.0, "phi": 1.5707963267948966, "samples": 4000 }
-  },
-  "style": {
-    "color_map": {
-      "type": "diverging",
-      "negative": "#f28c33",
-      "midpoint": "#f0f0f0",
-      "positive": "#33b3d9"
-    },
-    "color_indexer": "by_curve_t",
-    "stroke": {
-      "width_min": 1.0,
-      "width_max": 3.0,
-      "width_indexer": "by_curve_t",
-      "opacity": 0.95
-    },
+  "scene": {
     "background": "#0a0a0a",
-    "cyclic": true
+    "layers": [
+      {
+        "name": "bowtie",
+        "generator": {
+          "type": "lissajous",
+          "params": { "A": 1.0, "B": 1.0, "a": 1.0, "b": 2.0, "phi": 1.5707963267948966, "samples": 4000 }
+        },
+        "style": {
+          "color_map": {
+            "type": "diverging",
+            "negative": "#f28c33",
+            "midpoint": "#f0f0f0",
+            "positive": "#33b3d9"
+          },
+          "color_indexer": "by_curve_t",
+          "stroke": {
+            "width_min": 1.0,
+            "width_max": 3.0,
+            "width_indexer": "by_curve_t",
+            "opacity": 0.95
+          },
+          "cyclic": true
+        },
+        "transform": {
+          "translate": [0.0, 0.0],
+          "rotate_rad": 0.0,
+          "scale": 1.0,
+          "mirror_x": false,
+          "mirror_y": false
+        },
+        "visible": true
+      }
+    ]
   },
   "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
 }
