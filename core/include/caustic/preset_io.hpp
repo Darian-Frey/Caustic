@@ -59,6 +59,9 @@ inline std::string generator_type_to_string(GeneratorType t) {
         case GeneratorType::Hypotrochoid: return "hypotrochoid";
         case GeneratorType::Epitrochoid:  return "epitrochoid";
         case GeneratorType::Lissajous:    return "lissajous";
+        case GeneratorType::Rose:         return "rose";
+        case GeneratorType::Superformula: return "superformula";
+        case GeneratorType::Phyllotaxis:  return "phyllotaxis";
     }
     return "modular_chord";
 }
@@ -68,6 +71,9 @@ inline GeneratorType generator_type_from_string(const std::string& s) {
     if (s == "hypotrochoid")  return GeneratorType::Hypotrochoid;
     if (s == "epitrochoid")   return GeneratorType::Epitrochoid;
     if (s == "lissajous")     return GeneratorType::Lissajous;
+    if (s == "rose")          return GeneratorType::Rose;
+    if (s == "superformula")  return GeneratorType::Superformula;
+    if (s == "phyllotaxis")   return GeneratorType::Phyllotaxis;
     throw std::runtime_error("unknown generator type: " + s);
 }
 
@@ -119,6 +125,25 @@ inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
             gp["phi"] = gs.liss.phi;
             gp["samples"] = gs.liss.samples;
             break;
+        case GeneratorType::Rose:
+            gp["n"] = gs.rose.n;
+            gp["d"] = gs.rose.d;
+            gp["samples"] = gs.rose.samples;
+            break;
+        case GeneratorType::Superformula:
+            gp["m"] = gs.supf.m;
+            gp["n1"] = gs.supf.n1;
+            gp["n2"] = gs.supf.n2;
+            gp["n3"] = gs.supf.n3;
+            gp["a"] = gs.supf.a;
+            gp["b"] = gs.supf.b;
+            gp["samples"] = gs.supf.samples;
+            break;
+        case GeneratorType::Phyllotaxis:
+            gp["N"] = gs.phyl.N;
+            gp["alpha"] = gs.phyl.alpha;
+            gp["k"] = gs.phyl.k;
+            break;
     }
 }
 
@@ -149,6 +174,25 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
             gs.liss.b       = gp.value("b", gs.liss.b);
             gs.liss.phi     = gp.value("phi", gs.liss.phi);
             gs.liss.samples = gp.value("samples", gs.liss.samples);
+            break;
+        case GeneratorType::Rose:
+            gs.rose.n       = gp.value("n",       gs.rose.n);
+            gs.rose.d       = gp.value("d",       gs.rose.d);
+            gs.rose.samples = gp.value("samples", gs.rose.samples);
+            break;
+        case GeneratorType::Superformula:
+            gs.supf.m       = gp.value("m",       gs.supf.m);
+            gs.supf.n1      = gp.value("n1",      gs.supf.n1);
+            gs.supf.n2      = gp.value("n2",      gs.supf.n2);
+            gs.supf.n3      = gp.value("n3",      gs.supf.n3);
+            gs.supf.a       = gp.value("a",       gs.supf.a);
+            gs.supf.b       = gp.value("b",       gs.supf.b);
+            gs.supf.samples = gp.value("samples", gs.supf.samples);
+            break;
+        case GeneratorType::Phyllotaxis:
+            gs.phyl.N     = gp.value("N",     gs.phyl.N);
+            gs.phyl.alpha = gp.value("alpha", gs.phyl.alpha);
+            gs.phyl.k     = gp.value("k",     gs.phyl.k);
             break;
     }
 }

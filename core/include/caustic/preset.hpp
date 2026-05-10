@@ -20,6 +20,9 @@ enum class GeneratorType {
     Hypotrochoid,
     Epitrochoid,
     Lissajous,
+    Rose,
+    Superformula,
+    Phyllotaxis,
 };
 
 struct ModularChordParams {
@@ -50,12 +53,37 @@ struct LissajousParams {
     int samples = 4000;
 };
 
+struct RoseParams {
+    int n = 5;       // numerator of k = n/d in r = cos(k·θ)
+    int d = 1;       // denominator
+    int samples = 4000;
+};
+
+struct SuperformulaParams {
+    double m = 5.0;
+    double n1 = 2.0;
+    double n2 = 7.0;
+    double n3 = 7.0;
+    double a = 1.0;
+    double b = 1.0;
+    int samples = 4000;
+};
+
+struct PhyllotaxisParams {
+    int N = 500;
+    double alpha = 2.39996322972865332;  // golden angle ≈ 137.508° in radians
+    double k = 2.0;                      // modular chord multiplier
+};
+
 struct GeneratorSpec {
     GeneratorType type = GeneratorType::ModularChord;
     ModularChordParams chord;
     HypotrochoidParams hypo;
     EpitrochoidParams  epi;
     LissajousParams    liss;
+    RoseParams         rose;
+    SuperformulaParams supf;
+    PhyllotaxisParams  phyl;
 };
 
 // ---------------------------------------------------------------------------

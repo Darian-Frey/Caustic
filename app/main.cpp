@@ -30,6 +30,7 @@ namespace {
 
 const char* const kGeneratorNames[] = {
     "modular chord", "hypotrochoid", "epitrochoid", "lissajous",
+    "rose", "superformula", "phyllotaxis",
 };
 
 const char* const kIndexerNames[] = {
@@ -194,6 +195,26 @@ void render_param_panel(AppState& state) {
             if (slider_int_w("samples", &p.generator.liss.samples, 100, 100000)) state.dirty = true;
             break;
         }
+        case caustic::GeneratorType::Rose:
+            // n, d are integers for closure (r = cos(n·θ/d) closes at 2π·d).
+            if (slider_int_w("n",       &p.generator.rose.n,       1, 20)) state.dirty = true;
+            if (slider_int_w("d",       &p.generator.rose.d,       1, 10)) state.dirty = true;
+            if (slider_int_w("samples", &p.generator.rose.samples, 100, 100000)) state.dirty = true;
+            break;
+        case caustic::GeneratorType::Superformula:
+            if (slider_double_w("m",       &p.generator.supf.m,        0.0,  20.0,  0.1, "%.2f")) state.dirty = true;
+            if (slider_double_w("n1",      &p.generator.supf.n1,       0.1, 100.0,  0.1, "%.2f")) state.dirty = true;
+            if (slider_double_w("n2",      &p.generator.supf.n2,       0.0, 100.0,  0.1, "%.2f")) state.dirty = true;
+            if (slider_double_w("n3",      &p.generator.supf.n3,       0.0, 100.0,  0.1, "%.2f")) state.dirty = true;
+            if (slider_double_w("a",       &p.generator.supf.a,        0.1,   5.0,  0.01))         state.dirty = true;
+            if (slider_double_w("b",       &p.generator.supf.b,        0.1,   5.0,  0.01))         state.dirty = true;
+            if (slider_int_w("samples",    &p.generator.supf.samples,  100, 100000))               state.dirty = true;
+            break;
+        case caustic::GeneratorType::Phyllotaxis:
+            if (slider_int_w("N",        &p.generator.phyl.N,     10, 5000)) state.dirty = true;
+            if (slider_double_w("alpha", &p.generator.phyl.alpha, 0.0, 2.0 * std::numbers::pi, 0.0001, "%.5f")) state.dirty = true;
+            if (slider_double_w("k",     &p.generator.phyl.k,     0.0, 100.0, 0.01)) state.dirty = true;
+            break;
     }
 
     ImGui::Separator();
@@ -499,11 +520,16 @@ int main() {
     SetTargetFPS(60);
     rlImGuiSetup(true);
 
-    caustic::RaylibRenderer renderer(kInitialWidth, kInitialHeight);
-    AppState state;
-    refresh_preset_lists(state);
+    // Inner scope so `renderer` and `state` destruct BEFORE rlImGuiShutdown()
+    // and CloseWindow() tear down the GL context. RaylibRenderer's destructor
+    // calls UnloadRenderTexture, which segfaults if the GL context is already
+    // gone — that was the source of the on-exit segfault.
+    {
+        caustic::RaylibRenderer renderer(kInitialWidth, kInitialHeight);
+        AppState state;
+        refresh_preset_lists(state);
 
-    while (!WindowShouldClose()) {
+        while (!WindowShouldClose()) {
         const ImGuiIO& io = ImGui::GetIO();
 
         if (IsWindowResized()) {
@@ -559,11 +585,18 @@ int main() {
         const bool just_released = state.any_active_two_frames_ago && !dragging;
         if (state.dirty || (just_released && state.last_render_was_coarse)) {
             const bool coarse = dragging;
-            renderer.redraw(caustic::build_renderables(state.preset.scene, coarse),
-                            state.preset.scene.background,
-                            state.preset.camera);
-            state.dirty = false;
-            state.last_render_was_coarse = coarse;
+            try {
+                renderer.redraw(caustic::build_renderables(state.preset.scene, coarse),
+                                state.preset.scene.background,
+                                state.preset.camera);
+                state.dirty = false;
+                state.last_render_was_coarse = coarse;
+            } catch (const std::exception& e) {
+                // Don't loop forever on a bad spec — clear dirty and surface the
+                // error to the user instead of aborting.
+                state.dirty = false;
+                state.status_message = std::string("render failed: ") + e.what();
+            }
         }
 
         BeginDrawing();
@@ -583,6 +616,7 @@ int main() {
         state.any_active_two_frames_ago = state.any_active_last_frame;
         state.any_active_last_frame = active_now;
     }
+    }  // end inner scope — renderer + state destruct here, while GL context is still live
 
     rlImGuiShutdown();
     CloseWindow();

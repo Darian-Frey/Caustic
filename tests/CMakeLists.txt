@@ -12,6 +12,9 @@ add_executable(test_caustic
     test_preset_io.cpp
     test_svg_renderer.cpp
     test_array_tools.cpp
+    test_rose.cpp
+    test_superformula.cpp
+    test_phyllotaxis.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
@@ -45,7 +48,8 @@ if(TARGET caustic-cli)
     set_tests_properties(cli_file_not_found PROPERTIES WILL_FAIL TRUE)
 
     # Render every bundled preset.
-    foreach(preset cardioid_classic times_tables_51 spirograph_classic cardioid_epi bowtie)
+    foreach(preset cardioid_classic times_tables_51 spirograph_classic cardioid_epi bowtie
+                   rose_five_petal superformula_starfish phyllotaxis_sunflower)
         add_test(
             NAME cli_render_${preset}
             COMMAND $<TARGET_FILE:caustic-cli>

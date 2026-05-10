@@ -6,6 +6,9 @@
 #include <caustic/generators/hypotrochoid.hpp>
 #include <caustic/generators/lissajous.hpp>
 #include <caustic/generators/modular_chord.hpp>
+#include <caustic/generators/phyllotaxis.hpp>
+#include <caustic/generators/rose.hpp>
+#include <caustic/generators/superformula.hpp>
 #include <caustic/geometry_buffer.hpp>
 #include <caustic/preset.hpp>
 #include <caustic/sampler.hpp>
@@ -39,6 +42,23 @@ inline GeometryBuffer geometry_from_spec(const GeneratorSpec& g, bool coarse = f
             LissajousCurve curve(g.liss.A, g.liss.B, g.liss.a, g.liss.b, g.liss.phi);
             const int n = coarse ? std::max(100, g.liss.samples / 2) : g.liss.samples;
             geo.polylines.push_back(sample_curve(curve, n));
+            break;
+        }
+        case GeneratorType::Rose: {
+            RoseCurve curve(g.rose.n, g.rose.d);
+            const int n = coarse ? std::max(100, g.rose.samples / 2) : g.rose.samples;
+            geo.polylines.push_back(sample_curve(curve, n));
+            break;
+        }
+        case GeneratorType::Superformula: {
+            SuperformulaCurve curve(g.supf.m, g.supf.n1, g.supf.n2, g.supf.n3, g.supf.a, g.supf.b);
+            const int n = coarse ? std::max(100, g.supf.samples / 2) : g.supf.samples;
+            geo.polylines.push_back(sample_curve(curve, n));
+            break;
+        }
+        case GeneratorType::Phyllotaxis: {
+            const int N = coarse ? std::max(10, g.phyl.N / 4) : g.phyl.N;
+            geo.chords = phyllotaxis_chord(N, g.phyl.alpha, g.phyl.k);
             break;
         }
     }
