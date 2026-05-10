@@ -59,6 +59,10 @@ double lerp_width(double w_min, double w_max, double t) {
     return w_min + (w_max - w_min) * t;
 }
 
+double remap_cyclic(double t, bool cyclic) {
+    return cyclic ? (1.0 - std::abs(2.0 * t - 1.0)) : t;
+}
+
 }  // namespace
 
 RaylibRenderer::RaylibRenderer(int width, int height)
@@ -94,8 +98,8 @@ void RaylibRenderer::redraw(const GeometryBuffer& geo, const Style& style) {
         const double max_len = max_chord_length(geo.chords);
         for (std::size_t i = 0; i < N; ++i) {
             const Chord& c = geo.chords[i];
-            const double tc = indexer_value(style.color_indexer, c.a, c.b, i, N, max_len);
-            const double tw = indexer_value(style.stroke.width_indexer, c.a, c.b, i, N, max_len);
+            const double tc = remap_cyclic(indexer_value(style.color_indexer, c.a, c.b, i, N, max_len), style.cyclic);
+            const double tw = remap_cyclic(indexer_value(style.stroke.width_indexer, c.a, c.b, i, N, max_len), style.cyclic);
             const Color col = style.color_map->at(tc);
             const float w = static_cast<float>(lerp_width(style.stroke.width_min, style.stroke.width_max, tw));
             DrawLineEx(to_screen(c.a), to_screen(c.b), w, to_raylib(col, style.stroke.opacity));
@@ -111,8 +115,8 @@ void RaylibRenderer::redraw(const GeometryBuffer& geo, const Style& style) {
             for (std::size_t i = 0; i < segs; ++i) {
                 const Vec2 a = p[i];
                 const Vec2 b = p[i + 1];
-                const double tc = indexer_value(style.color_indexer, a, b, i, segs, max_len);
-                const double tw = indexer_value(style.stroke.width_indexer, a, b, i, segs, max_len);
+                const double tc = remap_cyclic(indexer_value(style.color_indexer, a, b, i, segs, max_len), style.cyclic);
+                const double tw = remap_cyclic(indexer_value(style.stroke.width_indexer, a, b, i, segs, max_len), style.cyclic);
                 const Color col = style.color_map->at(tc);
                 const float w = static_cast<float>(lerp_width(style.stroke.width_min, style.stroke.width_max, tw));
                 DrawLineEx(to_screen(a), to_screen(b), w, to_raylib(col, style.stroke.opacity));

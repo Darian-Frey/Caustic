@@ -71,26 +71,29 @@ caustic::Style build_style(Generator g) {
             s.stroke = {0.8, 0.8, caustic::Indexer::ChordIndex, 0.6};
             break;
         case Generator::Hypotrochoid:
-            // Cool→warm gradient with chord-length width modulation.
+            // Cool→warm gradient with chord-length width modulation. Closed curve → cyclic.
             s.color_map = std::make_shared<caustic::LinearGradient>(
                 caustic::Color{0.10, 0.27, 0.50}, caustic::Color{0.94, 0.75, 0.31});
             s.color_indexer = caustic::Indexer::CurveT;
             s.stroke = {1.0, 2.0, caustic::Indexer::ChordLength, 0.9};
+            s.cyclic = true;
             break;
         case Generator::Epitrochoid:
-            // Narrow-hue sweep keyed by segment angle.
+            // Narrow-hue sweep keyed by segment angle. Closed curve → cyclic.
             s.color_map = std::make_shared<caustic::HsvSweep>(180.0, 260.0, 0.65, 0.9);
             s.color_indexer = caustic::Indexer::Angle;
             s.stroke = {1.2, 1.2, caustic::Indexer::ChordIndex, 0.85};
+            s.cyclic = true;
             break;
         case Generator::Lissajous:
-            // Diverging orange-white-cyan with width tapering along the curve.
+            // Diverging orange-white-cyan with width tapering along the curve. Closed → cyclic.
             s.color_map = std::make_shared<caustic::Diverging>(
                 caustic::Color{0.95, 0.55, 0.20},
                 caustic::Color{0.95, 0.95, 0.95},
                 caustic::Color{0.20, 0.70, 0.85});
             s.color_indexer = caustic::Indexer::CurveT;
             s.stroke = {1.0, 3.0, caustic::Indexer::CurveT, 0.95};
+            s.cyclic = true;
             break;
     }
     return s;
