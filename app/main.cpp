@@ -222,7 +222,7 @@ void render_param_panel(AppState& state) {
 
     switch (state.gen) {
         case Generator::ModularChord:
-            if (slider_int_w("N", &state.chord.N, 3, 10000)) state.dirty = true;
+            if (slider_int_w("N", &state.chord.N, 3, 1000)) state.dirty = true;
             if (slider_double_w("k", &state.chord.k, 0.0, 100.0, 0.01)) state.dirty = true;
             break;
         case Generator::Hypotrochoid: {
@@ -231,10 +231,15 @@ void render_param_panel(AppState& state) {
             // Non-integer ratios precess and fill an annulus — the killer-demo
             // behavior described in ARCHITECTURE.md but not what the SPEC
             // defaults look like; left as a future toggle.
+            //
+            // SPEC.md: r ∈ (0, R). When r = R the curve collapses to the point
+            // (d, 0). Enforce r ≤ R - 1 here (and R ≥ 2 so r ≥ 1 stays valid).
             int Ri = static_cast<int>(std::lround(state.hypo.R));
             int ri = static_cast<int>(std::lround(state.hypo.r));
-            if (slider_int_w("R", &Ri, 1, 10)) { state.hypo.R = static_cast<double>(Ri); state.dirty = true; }
-            if (slider_int_w("r", &ri, 1, 10)) { state.hypo.r = static_cast<double>(ri); state.dirty = true; }
+            if (slider_int_w("R", &Ri, 2, 10)) { state.hypo.R = static_cast<double>(Ri); state.dirty = true; }
+            const int r_max = Ri - 1;
+            if (ri > r_max) { ri = r_max; state.hypo.r = static_cast<double>(ri); state.dirty = true; }
+            if (slider_int_w("r", &ri, 1, r_max)) { state.hypo.r = static_cast<double>(ri); state.dirty = true; }
             if (slider_double_w("d", &state.hypo.d, 0.0, 2.0 * state.hypo.R, 0.01)) state.dirty = true;
             if (slider_int_w("samples", &state.hypo.samples, 100, 100000)) state.dirty = true;
             break;
