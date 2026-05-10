@@ -163,13 +163,13 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 **Status:** Not started
 **Deliverables:**
 
-**Scene + transforms + arrays** (foundation — Stage A):
+**Scene + transforms + arrays** (foundation — Stage A, complete 2026-05-10):
 
-- [ ] `caustic::Scene` replaces single-generator `Preset`: scene = ordered list of `Layer { GeneratorSpec, StyleSpec, LayerTransform, visible }`. Preset version bumps to 2; v1 presets auto-promote on load (wrap the existing generator+style in a single layer with identity transform).
-- [ ] `LayerTransform { translate, rotate_rad, scale, mirror_x, mirror_y }` applied to each layer's geometry after generation, before rendering.
-- [ ] Layer-management UI: list with add / remove / reorder / visibility toggle / duplicate, plus per-layer transform sliders.
-- [ ] Array tools (free functions producing derived layers): `rotational_array(layer, N, center)`, `grid_tile(layer, rows, cols, spacing)`, `mirror_reflect(layer, axis)`. Triggered from UI buttons; "Apply" instantiates N concrete layers (each independently editable afterward).
-- [ ] Both renderers (`SvgRenderer`, `RaylibRenderer`) iterate the scene's layers and apply each layer's transform; SVG emits one `<g>` per layer (Inkscape-friendly).
+- [x] `caustic::Scene` replaces single-generator `Preset`: scene = ordered list of `Layer { GeneratorSpec, StyleSpec, LayerTransform, visible }`. Preset version bumps to 2; v1 presets auto-promote on load (`style.background` migrates to `scene.background`). 5 bundled presets migrated to on-disk v2 format.
+- [x] `LayerTransform { translate, rotate_rad, scale, mirror_x, mirror_y }` applied to each layer's geometry after generation, before rendering. `apply()` math is Mirror → Scale → Rotate → Translate.
+- [x] Layer-management UI: list with add / remove / reorder / visibility toggle / duplicate, plus per-layer transform sliders + name input.
+- [x] Array tools (free functions in `caustic/array_tools.hpp`): `rotational_array(layer, N, center)`, `grid_tile(layer, rows, cols, spacing)`, `mirror_reflect(layer, axis)`. Triggered from UI buttons; "Apply" replaces the selected layer with N concrete derived copies (each independently editable afterward).
+- [x] Both renderers (`SvgRenderer`, `RaylibRenderer`) iterate the scene's layers and apply each layer's transform; SVG emits one `<g>` per layer (Inkscape-friendly). 74 doctest cases (Stage A added 8 array-tool tests + multi-layer SVG tests).
 
 **New curves and hybrid mode** (content — Stage B):
 

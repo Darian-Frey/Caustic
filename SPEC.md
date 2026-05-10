@@ -200,28 +200,45 @@ Common parameters (all three):
 
 Authoritative format. Version field is mandatory; readers must reject unknown major versions.
 
+**Current schema: version 2.** v1 presets are accepted (single generator + style → wrapped in a one-layer Scene with identity transform; `style.background` migrates to `scene.background`); after auto-promote they are version 2 in memory.
+
 ```json
 {
-  "version": 1,
+  "version": 2,
   "name": "string, free-form",
-  "generator": {
-    "type": "modular_chord | hypotrochoid | epitrochoid | lissajous | superformula | phyllotaxis | clifford | de_jong | tinkerbell",
-    "params": { ... generator-specific, see §2 ... }
-  },
-  "style": {
-    "color_map": {
-      "type": "solid | linear_gradient | hsv_sweep | diverging",
-      ... type-specific fields ...
-    },
-    "color_indexer": "by_chord_index | by_chord_length | by_angle | by_curve_t",
-    "stroke": {
-      "width_min": 0.5,
-      "width_max": 0.5,
-      "width_indexer": "by_chord_index | by_chord_length | by_angle | by_curve_t",
-      "opacity": 0.6
-    },
+  "scene": {
     "background": "#0a0a0a",
-    "cyclic": false
+    "layers": [
+      {
+        "name": "layer 0",
+        "generator": {
+          "type": "modular_chord | hypotrochoid | epitrochoid | lissajous | superformula | phyllotaxis | clifford | de_jong | tinkerbell",
+          "params": { ... generator-specific, see §2 ... }
+        },
+        "style": {
+          "color_map": {
+            "type": "solid | linear_gradient | hsv_sweep | diverging",
+            ... type-specific fields ...
+          },
+          "color_indexer": "by_chord_index | by_chord_length | by_angle | by_curve_t",
+          "stroke": {
+            "width_min": 0.5,
+            "width_max": 0.5,
+            "width_indexer": "by_chord_index | by_chord_length | by_angle | by_curve_t",
+            "opacity": 0.6
+          },
+          "cyclic": false
+        },
+        "transform": {
+          "translate": [0.0, 0.0],
+          "rotate_rad": 0.0,
+          "scale": 1.0,
+          "mirror_x": false,
+          "mirror_y": false
+        },
+        "visible": true
+      }
+    ]
   },
   "camera": {
     "pan_x_px": 0.0,
@@ -230,6 +247,10 @@ Authoritative format. Version field is mandatory; readers must reject unknown ma
   }
 }
 ```
+
+A scene contains one or more layers; each layer is generated independently, its geometry is transformed by `layer.transform`, and the result is rendered in order. Renderers emit one `<g>` per layer in SVG output. The scene-level `background` colour is rendered as a single `<rect>` covering the viewBox (omitted in plotter mode).
+
+`layer.transform` applies Mirror → Scale → Rotate → Translate in that order (right-to-left composition: `v' = T + R(θ) · S · M · v`). `mirror_x` negates `x` (reflection across the y-axis); `mirror_y` negates `y`.
 
 The `cyclic` flag (default `false`) triangle-wave-remaps `t` through `1 - |2t - 1|` before colormap and stroke-width lookup. For closed curves (trochoids, Lissajous) this makes the colormap and width return to their starting value at `t=1`, hiding the seam where the curve loops back. Modular chord and other discrete primitives leave it off.
 
@@ -281,33 +302,44 @@ A reader MUST:
 
 ```json
 {
-  "version": 1,
-  "name": "cardioid-classic",
-  "generator": {
-    "type": "modular_chord",
-    "params": { "N": 200, "k": 2.0 }
-  },
-  "style": {
-    "color_map": {
-      "type": "linear_gradient",
-      "start": "#1a4480",
-      "end":   "#f0c050"
-    },
-    "color_indexer": "by_chord_length",
-    "stroke": {
-      "width_min": 0.5,
-      "width_max": 0.5,
-      "width_indexer": "by_chord_index",
-      "opacity": 0.6
-    },
+  "version": 2,
+  "name": "cardioid_classic",
+  "scene": {
     "background": "#0a0a0a",
-    "cyclic": false
+    "layers": [
+      {
+        "name": "cardioid",
+        "generator": {
+          "type": "modular_chord",
+          "params": { "N": 200, "k": 2.0 }
+        },
+        "style": {
+          "color_map": {
+            "type": "linear_gradient",
+            "start": "#1a4480",
+            "end": "#f0c050"
+          },
+          "color_indexer": "by_chord_length",
+          "stroke": {
+            "width_min": 0.6,
+            "width_max": 0.6,
+            "width_indexer": "by_chord_index",
+            "opacity": 0.6
+          },
+          "cyclic": false
+        },
+        "transform": {
+          "translate": [0.0, 0.0],
+          "rotate_rad": 0.0,
+          "scale": 1.0,
+          "mirror_x": false,
+          "mirror_y": false
+        },
+        "visible": true
+      }
+    ]
   },
-  "camera": {
-    "pan_x_px": 0.0,
-    "pan_y_px": 0.0,
-    "zoom": 1.0
-  }
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
 }
 ```
 
