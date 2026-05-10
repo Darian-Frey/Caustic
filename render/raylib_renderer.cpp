@@ -74,6 +74,15 @@ RaylibRenderer::~RaylibRenderer() {
     UnloadRenderTexture(canvas_);
 }
 
+void RaylibRenderer::resize(int width, int height) {
+    if (width <= 0 || height <= 0) return;
+    if (width == width_ && height == height_) return;
+    UnloadRenderTexture(canvas_);
+    width_ = width;
+    height_ = height;
+    canvas_ = LoadRenderTexture(width_, height_);
+}
+
 void RaylibRenderer::redraw(const GeometryBuffer& geo, const Style& style, const CameraState& camera) {
     double extent = max_extent(geo);
     if (extent < 1e-9) extent = 1.0;

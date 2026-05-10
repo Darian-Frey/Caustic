@@ -9,6 +9,7 @@ add_executable(test_caustic
     test_lissajous.cpp
     test_color.cpp
     test_indexer.cpp
+    test_preset_io.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
