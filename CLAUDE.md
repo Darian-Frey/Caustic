@@ -18,13 +18,14 @@ Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui 
 
 ## Active task
 
-**Phases 9 and 10 complete (2026-05-10). v1.1 string-art expansion shipped.** The generator set now spans 9 types — modular chord, hypotrochoid, epitrochoid, Lissajous, rose, superformula, phyllotaxis (chord variant), polygon chord, linear envelope — with multi-layer scenes, per-layer transforms, and array tools (rotational, grid, mirror-reflect). The user's reference-image string-art patterns (deltoid envelope, corner fan, four-bowtie grid, RGB triangle) are now authorable, with the most-canonical examples shipped as bundled presets.
+**Phase 8 complete (2026-05-11). Animation system shipped.** `caustic::anim` namespace adds an `Envelope` variant (`Static`/`Linear`/`Sine`), a flat `Target` enum dispatching to 16 animatable parameters across generators / layer transforms / camera via `write_target`, and an `AnimationSpec` carried on `AppState`. The Animation panel exposes target, envelope type + params, duration, scrub/play/pause, and a "Bake SVG sequence" action that writes numbered frames to `$XDG_CONFIG_HOME/caustic/animations/`. 114 doctest cases (102 → 114; +12 envelope/target/tick), 20 CTest CLI smoke cases.
 
-Pick the next phase. Three roughly-independent v1.1 expansions plus the release path:
+Pick the next phase. Two roughly-independent v1.1 paths plus release:
 
-- **Phase 8** — Animation system (parameter envelopes over time, frame export). Novel feature; reasonably contained.
 - **Phase 11** — Strange attractors (Clifford / de Jong / Tinkerbell). New iterative-orbit pipeline tier; biggest remaining mathematical generator family.
 - **Phase 12** — Polish & release. README screenshots / animated GIFs, expanded curated preset gallery (see "Nice-to-have polish backlog"), Windows cross-compile, itch.io page. Shortest path to a public 1.0 if the current feature set is enough.
+
+**Deferred from Phase 8:** `Keyframed` envelope (arbitrary control points — needs a 2D curve-editor widget, separate UX project); preset-borne animation (`AnimationSpec` lives only in `AppState`, not serialised — adding it would bump the preset schema again).
 
 **Deferred from Phase 9 Stage B** (not in any committed phase): full hybrid-mode generator (`HybridGenerator(curve, N, k)` — modular chord rule on any `ParametricCurve`) plus `MaurerRose` as its special case on rose. The concrete chord-set special cases (`polygon_chord`, `phyllotaxis_chord`) cover the user-visible string-art family without the nested-generator JSON refactor general hybrid mode would require.
 

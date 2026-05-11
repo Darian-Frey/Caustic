@@ -142,18 +142,20 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 8 — Animation system *(v1.1)*
+## Phase 8 — Animation system *(complete, 2026-05-11)*
 
 **Goal:** Parameter envelopes over time, frame export.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] `Param<T>` variant: `Static`, `Linear`, `Sine`, `Keyframed`
-- [ ] Timeline UI panel with scrub control
-- [ ] Per-parameter envelope editor
-- [ ] "Bake to SVG sequence" — writes numbered SVGs for offline composition into video
+- [x] `Envelope` variant: `Static`, `Linear`, `Sine` (Keyframed deferred — three smooth envelopes cover the demo space; keyframes would require a timeline-editor widget that's a separate UX project)
+- [x] Animation panel with scrub control, play/pause, duration, frame count
+- [x] Per-target envelope editor — `Target` enum dispatches to generator/layer/camera fields via `write_target`. 16 animatable parameters (modular k, hypo d, epi d, Lissajous phi/A/B, phyllotaxis α/k, polygon chord k/rotation, layer rotate/scale/translateX/translateY, camera zoom)
+- [x] "Bake to SVG sequence" — writes numbered SVGs (`name_0000.svg` … `name_NNNN.svg`) to `$XDG_CONFIG_HOME/caustic/animations/`
 
-**Acceptance:** A modular chord with `k` animated `Linear(2.0 → 3.0)` over 60 frames bakes to 60 SVGs that, when composed, show smooth cardioid → nephroid morph.
+**Acceptance:** A modular chord with `k` animated `Linear(2.0 → 3.0)` over 60 frames bakes to 60 SVGs that, when composed, show smooth cardioid → nephroid morph. Verified by `test_envelope.cpp` (12 cases, 114 doctest total).
+
+**Deferred:** `Keyframed` envelope with arbitrary control points (would require a 2D curve-editor widget — separate UX project); preset-borne animation (current `AnimationSpec` lives only in `AppState`, not serialised — adding it would bump the preset schema again).
 
 ---
 
