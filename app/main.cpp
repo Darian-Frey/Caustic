@@ -7,8 +7,10 @@
 #include <string>
 #include <vector>
 
+#include <caustic/animation.hpp>
 #include <caustic/array_tools.hpp>
 #include <caustic/colormap.hpp>
+#include <caustic/envelope.hpp>
 #include <caustic/geometry_buffer.hpp>
 #include <caustic/geometry_factory.hpp>
 #include <caustic/preset.hpp>
@@ -46,11 +48,14 @@ struct AppState {
     caustic::Preset preset;
     int current_layer_idx = 0;  // index into preset.scene.layers being edited by the UI
 
+    caustic::anim::AnimationSpec animation;
+    char bake_name_buf[64] = "animation";
+
     char save_name_buf[64] = "untitled";
     char export_name_buf[64] = "export";
     bool export_plotter_mode = false;
     int export_size = 1024;
-    std::string status_message;     // shown briefly after save/load/export
+    std::string status_message;     // shown briefly after save/load/export/bake
     std::vector<fs::path> bundled_presets;
     std::vector<fs::path> user_presets;
 
@@ -511,6 +516,132 @@ void render_layers_panel(AppState& state) {
     ImGui::End();
 }
 
+// ---------------------------------------------------------------------------
+// Animation panel
+
+fs::path user_animation_dir() {
+    return caustic::user_preset_dir().parent_path() / "animations";
+}
+
+void render_animation_panel(AppState& state) {
+    auto& anim = state.animation;
+    ImGui::Begin("Animation");
+
+    // Target picker. Listed in the same order as caustic::anim::Target so
+    // the index round-trips cleanly.
+    static const char* const kTargetNames[] = {
+        "(none — animation off)",
+        "modular chord: k",
+        "hypotrochoid: d",
+        "epitrochoid: d",
+        "lissajous: phi",
+        "lissajous: A",
+        "lissajous: B",
+        "phyllotaxis: alpha",
+        "phyllotaxis: k",
+        "polygon chord: k",
+        "polygon chord: rotation",
+        "layer: rotate",
+        "layer: scale",
+        "layer: translate x",
+        "layer: translate y",
+        "camera: zoom",
+    };
+    int target_idx = static_cast<int>(anim.target);
+    if (ImGui::Combo("target", &target_idx, kTargetNames, IM_ARRAYSIZE(kTargetNames))) {
+        anim.target = static_cast<caustic::anim::Target>(target_idx);
+        state.dirty = true;
+    }
+
+    // Envelope type
+    int env_idx = static_cast<int>(anim.envelope.index());
+    static const char* const kEnvNames[] = {"static", "linear", "sine"};
+    if (ImGui::Combo("envelope", &env_idx, kEnvNames, IM_ARRAYSIZE(kEnvNames))) {
+        switch (env_idx) {
+            case 0: anim.envelope = caustic::anim::Static{};  break;
+            case 1: anim.envelope = caustic::anim::Linear{};  break;
+            case 2: anim.envelope = caustic::anim::Sine{};    break;
+        }
+        state.dirty = true;
+    }
+
+    // Envelope params (depend on type).
+    if (auto* s = std::get_if<caustic::anim::Static>(&anim.envelope)) {
+        if (slider_double_w("value", &s->value, -100.0, 100.0, 0.01)) state.dirty = true;
+    } else if (auto* l = std::get_if<caustic::anim::Linear>(&anim.envelope)) {
+        if (slider_double_w("from", &l->v0, -100.0, 100.0, 0.01)) state.dirty = true;
+        if (slider_double_w("to",   &l->v1, -100.0, 100.0, 0.01)) state.dirty = true;
+    } else if (auto* w = std::get_if<caustic::anim::Sine>(&anim.envelope)) {
+        if (slider_double_w("amplitude", &w->amplitude, -100.0, 100.0, 0.01)) state.dirty = true;
+        if (slider_double_w("frequency", &w->frequency,    0.0,  10.0, 0.01)) state.dirty = true;
+        if (slider_double_w("phase",     &w->phase,       -std::numbers::pi, std::numbers::pi, 0.01)) state.dirty = true;
+        if (slider_double_w("offset",    &w->offset,    -100.0, 100.0, 0.01)) state.dirty = true;
+    }
+
+    ImGui::Separator();
+
+    if (slider_double_w("duration (s)", &anim.duration_sec, 0.1, 60.0, 0.1, "%.2f")) {}
+
+    if (ImGui::Button(anim.playing ? "Pause" : "Play")) {
+        anim.playing = !anim.playing;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset to t=0")) {
+        anim.current_t = 0.0;
+        state.dirty = true;
+    }
+
+    float t_f = static_cast<float>(anim.current_t);
+    if (ImGui::SliderFloat("time", &t_f, 0.0f, 1.0f, "%.3f")) {
+        anim.current_t = t_f;
+        anim.playing = false;  // scrubbing pauses playback
+        state.dirty = true;
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Bake to SVG sequence (output dir: %s)", user_animation_dir().string().c_str());
+    if (slider_int_w("frames", &anim.bake_frames, 2, 600)) {}
+    ImGui::PushItemWidth(180);
+    ImGui::InputText("name prefix", state.bake_name_buf, sizeof(state.bake_name_buf));
+    ImGui::PopItemWidth();
+    if (ImGui::Button("Bake SVG sequence")) {
+        try {
+            const fs::path dir = user_animation_dir();
+            fs::create_directories(dir);
+            caustic::SvgOptions opts;
+            opts.width = static_cast<double>(state.export_size);
+            opts.height = static_cast<double>(state.export_size);
+            // Iterate frames, writing a numbered SVG per frame. Animation
+            // mutates a copy of the preset so the user's live state is
+            // preserved while baking.
+            const int frames = std::max(2, anim.bake_frames);
+            for (int i = 0; i < frames; ++i) {
+                const double t = static_cast<double>(i) / static_cast<double>(frames - 1);
+                caustic::Preset frame = state.preset;
+                if (anim.target != caustic::anim::Target::None) {
+                    const double value = caustic::anim::evaluate(anim.envelope, t);
+                    caustic::anim::write_target(anim.target, value, frame, state.current_layer_idx);
+                }
+                char buf[80];
+                std::snprintf(buf, sizeof(buf), "%s_%04d.svg", state.bake_name_buf, i);
+                caustic::write_svg(dir / buf,
+                                   caustic::build_renderables(frame.scene, /*coarse=*/false),
+                                   frame.scene.background,
+                                   opts);
+            }
+            state.status_message = "baked " + std::to_string(frames) + " frames to " + dir.string();
+        } catch (const std::exception& e) {
+            state.status_message = std::string("bake failed: ") + e.what();
+        }
+    }
+
+    if (!state.status_message.empty()) {
+        ImGui::TextDisabled("%s", state.status_message.c_str());
+    }
+
+    ImGui::End();
+}
+
 void render_preset_panel(AppState& state) {
     ImGui::Begin("Presets");
 
@@ -672,6 +803,19 @@ int main() {
             }
         }
 
+        // Animation: tick when playing, evaluate envelope, write target.
+        // current_t change always dirties the canvas. While a target is set,
+        // any scrub or play advances the geometry — pausing freezes it.
+        if (state.animation.target != caustic::anim::Target::None) {
+            const bool changed = caustic::anim::tick(state.animation, GetFrameTime());
+            // Always apply the current_t (so manual scrubs take effect too).
+            const double value = caustic::anim::evaluate(state.animation.envelope,
+                                                         state.animation.current_t);
+            caustic::anim::write_target(state.animation.target, value,
+                                        state.preset, state.current_layer_idx);
+            if (changed) state.dirty = true;
+        }
+
         const bool dragging = state.any_active_last_frame;
         const bool just_released = state.any_active_two_frames_ago && !dragging;
         if (state.dirty || (just_released && state.last_render_was_coarse)) {
@@ -698,6 +842,7 @@ int main() {
         render_param_panel(state);
         render_style_panel(state);
         render_layers_panel(state);
+        render_animation_panel(state);
         render_preset_panel(state);
         const bool active_now = ImGui::IsAnyItemActive();
         rlImGuiEnd();

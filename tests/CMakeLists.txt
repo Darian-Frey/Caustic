@@ -17,6 +17,7 @@ add_executable(test_caustic
     test_phyllotaxis.cpp
     test_polygon.cpp
     test_linear_envelope.cpp
+    test_envelope.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
