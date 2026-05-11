@@ -1,0 +1,54 @@
+{
+  "version": 2,
+  "name": "swoop_pair",
+  "scene": {
+    "background": "#0a0a14",
+    "layers": [
+      {
+        "name": "top parabolic angle",
+        "generator": {
+          "type": "linear_envelope",
+          "params": {
+            "a_start": [ 0.0,  1.5],
+            "a_end":   [-1.5,  0.0],
+            "b_start": [ 0.0,  1.5],
+            "b_end":   [ 1.5,  0.0],
+            "N": 50,
+            "k": -1.0
+          }
+        },
+        "style": {
+          "color_map": { "type": "solid", "color": "#f0f0f0" },
+          "color_indexer": "by_chord_index",
+          "stroke": { "width_min": 0.5, "width_max": 0.5, "width_indexer": "by_chord_index", "opacity": 0.9 },
+          "cyclic": false
+        },
+        "transform": { "translate": [0.0, 0.0], "rotate_rad": 0.0, "scale": 1.0, "mirror_x": false, "mirror_y": false },
+        "visible": true
+      },
+      {
+        "name": "bottom parabolic angle",
+        "generator": {
+          "type": "linear_envelope",
+          "params": {
+            "a_start": [ 0.0, -1.5],
+            "a_end":   [-1.5,  0.0],
+            "b_start": [ 0.0, -1.5],
+            "b_end":   [ 1.5,  0.0],
+            "N": 50,
+            "k": -1.0
+          }
+        },
+        "style": {
+          "color_map": { "type": "solid", "color": "#f0f0f0" },
+          "color_indexer": "by_chord_index",
+          "stroke": { "width_min": 0.5, "width_max": 0.5, "width_indexer": "by_chord_index", "opacity": 0.9 },
+          "cyclic": false
+        },
+        "transform": { "translate": [0.0, 0.0], "rotate_rad": 0.0, "scale": 1.0, "mirror_x": false, "mirror_y": false },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}

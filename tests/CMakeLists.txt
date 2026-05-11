@@ -55,7 +55,8 @@ if(TARGET caustic-cli)
     foreach(preset cardioid_classic times_tables_51 spirograph_classic cardioid_epi bowtie
                    rose_five_petal superformula_starfish phyllotaxis_sunflower
                    corner_fan envelope_bowtie deltoid hexagram four_bowties rgb_triangle
-                   clifford_butterfly de_jong_classic tinkerbell)
+                   clifford_butterfly de_jong_classic tinkerbell
+                   swoop_pair bowtie_hourglass)
         add_test(
             NAME cli_render_${preset}
             COMMAND $<TARGET_FILE:caustic-cli>

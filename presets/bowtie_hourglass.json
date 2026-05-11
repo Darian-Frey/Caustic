@@ -1,0 +1,98 @@
+{
+  "version": 2,
+  "name": "bowtie_hourglass",
+  "scene": {
+    "background": "#0a0a0a",
+    "layers": [
+      {
+        "name": "upper bowtie - right lobe",
+        "generator": {
+          "type": "linear_envelope",
+          "params": {
+            "a_start": [ 0.0,  0.5],
+            "a_end":   [ 1.0,  1.0],
+            "b_start": [ 0.0,  0.5],
+            "b_end":   [ 1.0,  0.0],
+            "N": 36,
+            "k": -1.0
+          }
+        },
+        "style": {
+          "color_map": { "type": "solid", "color": "#e07030" },
+          "color_indexer": "by_chord_index",
+          "stroke": { "width_min": 0.5, "width_max": 0.5, "width_indexer": "by_chord_index", "opacity": 0.9 },
+          "cyclic": false
+        },
+        "transform": { "translate": [0.0, 0.0], "rotate_rad": 0.0, "scale": 1.0, "mirror_x": false, "mirror_y": false },
+        "visible": true
+      },
+      {
+        "name": "upper bowtie - left lobe",
+        "generator": {
+          "type": "linear_envelope",
+          "params": {
+            "a_start": [ 0.0,  0.5],
+            "a_end":   [-1.0,  1.0],
+            "b_start": [ 0.0,  0.5],
+            "b_end":   [-1.0,  0.0],
+            "N": 36,
+            "k": -1.0
+          }
+        },
+        "style": {
+          "color_map": { "type": "solid", "color": "#e07030" },
+          "color_indexer": "by_chord_index",
+          "stroke": { "width_min": 0.5, "width_max": 0.5, "width_indexer": "by_chord_index", "opacity": 0.9 },
+          "cyclic": false
+        },
+        "transform": { "translate": [0.0, 0.0], "rotate_rad": 0.0, "scale": 1.0, "mirror_x": false, "mirror_y": false },
+        "visible": true
+      },
+      {
+        "name": "lower bowtie - right lobe",
+        "generator": {
+          "type": "linear_envelope",
+          "params": {
+            "a_start": [ 0.0, -0.5],
+            "a_end":   [ 1.0,  0.0],
+            "b_start": [ 0.0, -0.5],
+            "b_end":   [ 1.0, -1.0],
+            "N": 36,
+            "k": -1.0
+          }
+        },
+        "style": {
+          "color_map": { "type": "solid", "color": "#e8e8ec" },
+          "color_indexer": "by_chord_index",
+          "stroke": { "width_min": 0.5, "width_max": 0.5, "width_indexer": "by_chord_index", "opacity": 0.9 },
+          "cyclic": false
+        },
+        "transform": { "translate": [0.0, 0.0], "rotate_rad": 0.0, "scale": 1.0, "mirror_x": false, "mirror_y": false },
+        "visible": true
+      },
+      {
+        "name": "lower bowtie - left lobe",
+        "generator": {
+          "type": "linear_envelope",
+          "params": {
+            "a_start": [ 0.0, -0.5],
+            "a_end":   [-1.0,  0.0],
+            "b_start": [ 0.0, -0.5],
+            "b_end":   [-1.0, -1.0],
+            "N": 36,
+            "k": -1.0
+          }
+        },
+        "style": {
+          "color_map": { "type": "solid", "color": "#e8e8ec" },
+          "color_indexer": "by_chord_index",
+          "stroke": { "width_min": 0.5, "width_max": 0.5, "width_indexer": "by_chord_index", "opacity": 0.9 },
+          "cyclic": false
+        },
+        "transform": { "translate": [0.0, 0.0], "rotate_rad": 0.0, "scale": 1.0, "mirror_x": false, "mirror_y": false },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}
