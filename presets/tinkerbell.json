@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "name": "tinkerbell",
+  "scene": {
+    "background": "#06060a",
+    "layers": [
+      {
+        "name": "tinkerbell orbit",
+        "generator": {
+          "type": "tinkerbell",
+          "params": {
+            "a": 0.9,
+            "b": -0.6013,
+            "c": 2.0,
+            "d": 0.5,
+            "x0": -0.72,
+            "y0": -0.64,
+            "iterations": 20000,
+            "burn_in": 100
+          }
+        },
+        "style": {
+          "color_map": {
+            "type": "hsv_sweep",
+            "hue_start": 300.0,
+            "hue_end": 60.0,
+            "saturation": 0.7,
+            "value": 0.95
+          },
+          "color_indexer": "by_curve_t",
+          "stroke": {
+            "width_min": 0.2,
+            "width_max": 0.2,
+            "width_indexer": "by_curve_t",
+            "opacity": 0.25
+          },
+          "cyclic": false
+        },
+        "transform": {
+          "translate": [0.0, 0.0],
+          "rotate_rad": 0.0,
+          "scale": 1.0,
+          "mirror_x": false,
+          "mirror_y": false
+        },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}
