@@ -34,6 +34,7 @@ const char* const kGeneratorNames[] = {
     "modular chord", "hypotrochoid", "epitrochoid", "lissajous",
     "rose", "superformula", "phyllotaxis",
     "polygon chord", "linear envelope",
+    "clifford", "de jong", "tinkerbell",
 };
 
 const char* const kIndexerNames[] = {
@@ -275,6 +276,43 @@ void render_param_panel(AppState& state) {
             if (slider_double_w("k", &p.generator.lenv.k, -100.0, 100.0, 0.1)) state.dirty = true;
             break;
         }
+        case caustic::GeneratorType::Clifford: {
+            auto& c = p.generator.clif;
+            if (slider_double_w("a",  &c.a,  -3.0, 3.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("b",  &c.b,  -3.0, 3.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("c",  &c.c,  -3.0, 3.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("d",  &c.d,  -3.0, 3.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("x0", &c.x0, -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("y0", &c.y0, -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_int_w("iterations", &c.iterations, 500, 200000)) state.dirty = true;
+            if (slider_int_w("burn in",    &c.burn_in,    0,   10000))  state.dirty = true;
+            break;
+        }
+        case caustic::GeneratorType::DeJong: {
+            auto& c = p.generator.dejo;
+            if (slider_double_w("a",  &c.a,  -3.0, 3.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("b",  &c.b,  -3.0, 3.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("c",  &c.c,  -3.0, 3.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("d",  &c.d,  -3.0, 3.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("x0", &c.x0, -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("y0", &c.y0, -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_int_w("iterations", &c.iterations, 500, 200000)) state.dirty = true;
+            if (slider_int_w("burn in",    &c.burn_in,    0,   10000))  state.dirty = true;
+            break;
+        }
+        case caustic::GeneratorType::Tinkerbell: {
+            auto& c = p.generator.tink;
+            if (slider_double_w("a",  &c.a,  -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("b",  &c.b,  -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("c",  &c.c,  -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("d",  &c.d,  -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("x0", &c.x0, -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_double_w("y0", &c.y0, -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
+            if (slider_int_w("iterations", &c.iterations, 500, 200000)) state.dirty = true;
+            if (slider_int_w("burn in",    &c.burn_in,    0,   10000))  state.dirty = true;
+            ImGui::TextDisabled("Tinkerbell can diverge — orbit truncates if out of basin.");
+            break;
+        }
     }
 
     if (ImGui::Button("Reset generator params")) {
@@ -292,6 +330,9 @@ void render_param_panel(AppState& state) {
             case caustic::GeneratorType::Phyllotaxis:    p.generator.phyl = caustic::PhyllotaxisParams{};    break;
             case caustic::GeneratorType::PolygonChord:   p.generator.poly = caustic::PolygonChordParams{};   break;
             case caustic::GeneratorType::LinearEnvelope: p.generator.lenv = caustic::LinearEnvelopeParams{}; break;
+            case caustic::GeneratorType::Clifford:       p.generator.clif = caustic::CliffordParams{};       break;
+            case caustic::GeneratorType::DeJong:         p.generator.dejo = caustic::DeJongParams{};         break;
+            case caustic::GeneratorType::Tinkerbell:     p.generator.tink = caustic::TinkerbellParams{};     break;
         }
         state.dirty = true;
     }
@@ -541,6 +582,18 @@ void render_animation_panel(AppState& state) {
         "phyllotaxis: k",
         "polygon chord: k",
         "polygon chord: rotation",
+        "clifford: a",
+        "clifford: b",
+        "clifford: c",
+        "clifford: d",
+        "de jong: a",
+        "de jong: b",
+        "de jong: c",
+        "de jong: d",
+        "tinkerbell: a",
+        "tinkerbell: b",
+        "tinkerbell: c",
+        "tinkerbell: d",
         "layer: rotate",
         "layer: scale",
         "layer: translate x",

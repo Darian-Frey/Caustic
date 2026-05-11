@@ -31,6 +31,21 @@ enum class Target {
     // Polygon chord
     PolygonChord_k,
     PolygonChord_rotation,
+    // Clifford attractor
+    Clifford_a,
+    Clifford_b,
+    Clifford_c,
+    Clifford_d,
+    // De Jong attractor
+    DeJong_a,
+    DeJong_b,
+    DeJong_c,
+    DeJong_d,
+    // Tinkerbell attractor
+    Tinkerbell_a,
+    Tinkerbell_b,
+    Tinkerbell_c,
+    Tinkerbell_d,
     // Per-layer transform
     LayerRotate,
     LayerScale,
@@ -53,6 +68,18 @@ inline const char* target_name(Target t) {
         case Target::Phyllotaxis_k:          return "phyllotaxis: k";
         case Target::PolygonChord_k:         return "polygon chord: k";
         case Target::PolygonChord_rotation:  return "polygon chord: rotation";
+        case Target::Clifford_a:             return "clifford: a";
+        case Target::Clifford_b:             return "clifford: b";
+        case Target::Clifford_c:             return "clifford: c";
+        case Target::Clifford_d:             return "clifford: d";
+        case Target::DeJong_a:               return "de jong: a";
+        case Target::DeJong_b:               return "de jong: b";
+        case Target::DeJong_c:               return "de jong: c";
+        case Target::DeJong_d:               return "de jong: d";
+        case Target::Tinkerbell_a:           return "tinkerbell: a";
+        case Target::Tinkerbell_b:           return "tinkerbell: b";
+        case Target::Tinkerbell_c:           return "tinkerbell: c";
+        case Target::Tinkerbell_d:           return "tinkerbell: d";
         case Target::LayerRotate:            return "layer: rotate";
         case Target::LayerScale:             return "layer: scale";
         case Target::LayerTranslateX:        return "layer: translate x";
@@ -101,6 +128,43 @@ inline void write_target(Target tgt, double value, Preset& p, int layer_idx) {
             break;
         case Target::PolygonChord_rotation:
             if (layer_in_bounds()) p.scene.layers[layer_idx].generator.poly.rotation_rad = value;
+            break;
+
+        case Target::Clifford_a:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.clif.a = value;
+            break;
+        case Target::Clifford_b:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.clif.b = value;
+            break;
+        case Target::Clifford_c:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.clif.c = value;
+            break;
+        case Target::Clifford_d:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.clif.d = value;
+            break;
+        case Target::DeJong_a:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.dejo.a = value;
+            break;
+        case Target::DeJong_b:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.dejo.b = value;
+            break;
+        case Target::DeJong_c:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.dejo.c = value;
+            break;
+        case Target::DeJong_d:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.dejo.d = value;
+            break;
+        case Target::Tinkerbell_a:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.tink.a = value;
+            break;
+        case Target::Tinkerbell_b:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.tink.b = value;
+            break;
+        case Target::Tinkerbell_c:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.tink.c = value;
+            break;
+        case Target::Tinkerbell_d:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.tink.d = value;
             break;
 
         case Target::LayerRotate:

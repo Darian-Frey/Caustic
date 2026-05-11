@@ -25,6 +25,9 @@ enum class GeneratorType {
     Phyllotaxis,
     PolygonChord,
     LinearEnvelope,
+    Clifford,
+    DeJong,
+    Tinkerbell,
 };
 
 struct ModularChordParams {
@@ -96,6 +99,44 @@ struct LinearEnvelopeParams {
     double k = 1.0;
 };
 
+// Strange-attractor parameter blocks. Each holds the four map coefficients
+// (a, b, c, d), the initial orbit point (x0, y0), and the
+// burn_in / iterations counts. Defaults are tuned per attractor to land on
+// the canonical aesthetic value (Clifford butterfly, de Jong classic,
+// Tinkerbell basin).
+struct CliffordParams {
+    double a = -1.4;
+    double b =  1.6;
+    double c =  1.0;
+    double d =  0.7;
+    double x0 = 0.1;
+    double y0 = 0.1;
+    int iterations = 30000;
+    int burn_in = 100;
+};
+
+struct DeJongParams {
+    double a =  1.4;
+    double b = -2.3;
+    double c =  2.4;
+    double d = -2.1;
+    double x0 = 0.1;
+    double y0 = 0.1;
+    int iterations = 30000;
+    int burn_in = 100;
+};
+
+struct TinkerbellParams {
+    double a =  0.9;
+    double b = -0.6013;
+    double c =  2.0;
+    double d =  0.5;
+    double x0 = -0.72;
+    double y0 = -0.64;
+    int iterations = 10000;  // Tinkerbell escapes its basin readily; smaller default keeps it stable
+    int burn_in = 100;
+};
+
 struct GeneratorSpec {
     GeneratorType type = GeneratorType::ModularChord;
     ModularChordParams    chord;
@@ -107,6 +148,9 @@ struct GeneratorSpec {
     PhyllotaxisParams     phyl;
     PolygonChordParams    poly;
     LinearEnvelopeParams  lenv;
+    CliffordParams        clif;
+    DeJongParams          dejo;
+    TinkerbellParams      tink;
 };
 
 // ---------------------------------------------------------------------------

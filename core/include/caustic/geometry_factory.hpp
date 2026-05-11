@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include <caustic/generators/attractors.hpp>
 #include <caustic/generators/epitrochoid.hpp>
 #include <caustic/generators/hypotrochoid.hpp>
 #include <caustic/generators/linear_envelope.hpp>
@@ -73,6 +74,27 @@ inline GeometryBuffer geometry_from_spec(const GeneratorSpec& g, bool coarse = f
             geo.chords = linear_envelope(g.lenv.a_start, g.lenv.a_end,
                                           g.lenv.b_start, g.lenv.b_end,
                                           N, g.lenv.k);
+            break;
+        }
+        case GeneratorType::Clifford: {
+            const int iters = coarse ? std::max(500, g.clif.iterations / 4) : g.clif.iterations;
+            auto orbit = clifford_orbit(g.clif.a, g.clif.b, g.clif.c, g.clif.d,
+                                        g.clif.x0, g.clif.y0, g.clif.burn_in, iters);
+            if (!orbit.points.empty()) geo.polylines.push_back(std::move(orbit.points));
+            break;
+        }
+        case GeneratorType::DeJong: {
+            const int iters = coarse ? std::max(500, g.dejo.iterations / 4) : g.dejo.iterations;
+            auto orbit = de_jong_orbit(g.dejo.a, g.dejo.b, g.dejo.c, g.dejo.d,
+                                       g.dejo.x0, g.dejo.y0, g.dejo.burn_in, iters);
+            if (!orbit.points.empty()) geo.polylines.push_back(std::move(orbit.points));
+            break;
+        }
+        case GeneratorType::Tinkerbell: {
+            const int iters = coarse ? std::max(500, g.tink.iterations / 4) : g.tink.iterations;
+            auto orbit = tinkerbell_orbit(g.tink.a, g.tink.b, g.tink.c, g.tink.d,
+                                          g.tink.x0, g.tink.y0, g.tink.burn_in, iters);
+            if (!orbit.points.empty()) geo.polylines.push_back(std::move(orbit.points));
             break;
         }
     }

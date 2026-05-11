@@ -64,6 +64,9 @@ inline std::string generator_type_to_string(GeneratorType t) {
         case GeneratorType::Phyllotaxis:    return "phyllotaxis";
         case GeneratorType::PolygonChord:   return "polygon_chord";
         case GeneratorType::LinearEnvelope: return "linear_envelope";
+        case GeneratorType::Clifford:       return "clifford";
+        case GeneratorType::DeJong:         return "de_jong";
+        case GeneratorType::Tinkerbell:     return "tinkerbell";
     }
     return "modular_chord";
 }
@@ -78,6 +81,9 @@ inline GeneratorType generator_type_from_string(const std::string& s) {
     if (s == "phyllotaxis")     return GeneratorType::Phyllotaxis;
     if (s == "polygon_chord")   return GeneratorType::PolygonChord;
     if (s == "linear_envelope") return GeneratorType::LinearEnvelope;
+    if (s == "clifford")        return GeneratorType::Clifford;
+    if (s == "de_jong")         return GeneratorType::DeJong;
+    if (s == "tinkerbell")      return GeneratorType::Tinkerbell;
     throw std::runtime_error("unknown generator type: " + s);
 }
 
@@ -162,6 +168,27 @@ inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
             gp["N"] = gs.lenv.N;
             gp["k"] = gs.lenv.k;
             break;
+        case GeneratorType::Clifford:
+            gp["a"] = gs.clif.a; gp["b"] = gs.clif.b;
+            gp["c"] = gs.clif.c; gp["d"] = gs.clif.d;
+            gp["x0"] = gs.clif.x0; gp["y0"] = gs.clif.y0;
+            gp["iterations"] = gs.clif.iterations;
+            gp["burn_in"]    = gs.clif.burn_in;
+            break;
+        case GeneratorType::DeJong:
+            gp["a"] = gs.dejo.a; gp["b"] = gs.dejo.b;
+            gp["c"] = gs.dejo.c; gp["d"] = gs.dejo.d;
+            gp["x0"] = gs.dejo.x0; gp["y0"] = gs.dejo.y0;
+            gp["iterations"] = gs.dejo.iterations;
+            gp["burn_in"]    = gs.dejo.burn_in;
+            break;
+        case GeneratorType::Tinkerbell:
+            gp["a"] = gs.tink.a; gp["b"] = gs.tink.b;
+            gp["c"] = gs.tink.c; gp["d"] = gs.tink.d;
+            gp["x0"] = gs.tink.x0; gp["y0"] = gs.tink.y0;
+            gp["iterations"] = gs.tink.iterations;
+            gp["burn_in"]    = gs.tink.burn_in;
+            break;
     }
 }
 
@@ -233,6 +260,36 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
             gs.lenv.k       = gp.value("k", gs.lenv.k);
             break;
         }
+        case GeneratorType::Clifford:
+            gs.clif.a  = gp.value("a",  gs.clif.a);
+            gs.clif.b  = gp.value("b",  gs.clif.b);
+            gs.clif.c  = gp.value("c",  gs.clif.c);
+            gs.clif.d  = gp.value("d",  gs.clif.d);
+            gs.clif.x0 = gp.value("x0", gs.clif.x0);
+            gs.clif.y0 = gp.value("y0", gs.clif.y0);
+            gs.clif.iterations = gp.value("iterations", gs.clif.iterations);
+            gs.clif.burn_in    = gp.value("burn_in",    gs.clif.burn_in);
+            break;
+        case GeneratorType::DeJong:
+            gs.dejo.a  = gp.value("a",  gs.dejo.a);
+            gs.dejo.b  = gp.value("b",  gs.dejo.b);
+            gs.dejo.c  = gp.value("c",  gs.dejo.c);
+            gs.dejo.d  = gp.value("d",  gs.dejo.d);
+            gs.dejo.x0 = gp.value("x0", gs.dejo.x0);
+            gs.dejo.y0 = gp.value("y0", gs.dejo.y0);
+            gs.dejo.iterations = gp.value("iterations", gs.dejo.iterations);
+            gs.dejo.burn_in    = gp.value("burn_in",    gs.dejo.burn_in);
+            break;
+        case GeneratorType::Tinkerbell:
+            gs.tink.a  = gp.value("a",  gs.tink.a);
+            gs.tink.b  = gp.value("b",  gs.tink.b);
+            gs.tink.c  = gp.value("c",  gs.tink.c);
+            gs.tink.d  = gp.value("d",  gs.tink.d);
+            gs.tink.x0 = gp.value("x0", gs.tink.x0);
+            gs.tink.y0 = gp.value("y0", gs.tink.y0);
+            gs.tink.iterations = gp.value("iterations", gs.tink.iterations);
+            gs.tink.burn_in    = gp.value("burn_in",    gs.tink.burn_in);
+            break;
     }
 }
 
