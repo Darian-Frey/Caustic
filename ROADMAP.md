@@ -203,20 +203,24 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 11 — Strange attractors *(v1.1)*
+## Phase 11 — Strange attractors *(complete, 2026-05-11)*
 
 **Goal:** Iterative-orbit generator family — Clifford, de Jong, Tinkerbell. New "trace N iterations as polyline" pipeline tier alongside the closed-form curve and chord-set tiers.
-**Status:** Not started
+**Status:** Complete
 **Deliverables:**
 
-- [ ] `IterativeOrbit` interface — `(x_n, y_n) → (x_{n+1}, y_{n+1})` with explicit `(x_0, y_0)` and iteration count
-- [ ] `CliffordAttractor`, `DeJongAttractor`, `TinkerbellAttractor` implementations
-- [ ] Burn-in (discard first M iterations) + sample N to a polyline (or scatter set)
-- [ ] Bounding box estimated from a coarse pre-pass; degenerate / divergent orbits surface a warning rather than emit broken SVG
-- [ ] `by_iteration_index` color indexer to colour orbits chronologically
-- [ ] Determinism: `(x_0, y_0)` and parameters carried in the preset; same preset → byte-identical SVG within a single toolchain (cross-architecture parity is not guaranteed for iterative `double` math, documented)
+- [x] `iterate_orbit<Step>` template — generic step-function iterator with explicit `(x0, y0)`, burn-in, and iteration count
+- [x] `clifford_orbit`, `de_jong_orbit`, `tinkerbell_orbit` step functions
+- [x] Burn-in (discard first M iterations) + sample N to a polyline
+- [x] Divergence detection: `|x|` or `|y| > 1e6` or non-finite values truncate the orbit and set `AttractorOrbit.diverged`; UI shows a hint for Tinkerbell. The renderer's existing fit-to-content scaling handles bounding box automatically, so no separate coarse pre-pass was needed.
+- [x] Chronological orbit colouring via the existing `CurveT` indexer (i/(N-1) on the polyline is the iteration index). No new indexer enum value introduced.
+- [x] Determinism: `(x0, y0)` and parameters carried in the preset; tested via `test_attractors.cpp` — two consecutive Clifford orbits with the same params produce byte-identical point sequences. Cross-architecture parity not guaranteed for iterative `double` math (documented).
+- [x] Three bundled presets: `clifford_butterfly`, `de_jong_classic`, `tinkerbell`. Styling tuned (width 0.15–0.2, opacity 0.10–0.25, iterations 20k–80k) so the polyline-connect-iterates render reads as orbital density rather than a filled blob.
+- [x] Animation Target enum gains 12 new entries (a/b/c/d for each attractor) so envelopes can drive coefficient sweeps.
 
-**Acceptance:** Clifford with `(a, b, c, d) = (-1.4, 1.6, 1.0, 0.7)` produces the canonical butterfly attractor; an orbit of 100k iterations renders cleanly via the existing polyline path; same preset across two consecutive runs produces byte-identical SVG.
+**Acceptance:** Clifford with `(a, b, c, d) = (-1.4, 1.6, 1.0, 0.7)` produces the canonical butterfly. De Jong with `(1.4, -2.3, 2.4, -2.1)` produces the dual-wing classic. Tinkerbell with `(0.9, -0.6013, 2.0, 0.5)` from `(-0.72, -0.64)` stays in basin for 20k iterations. 123 doctest cases (114 → 123: +9 attractor cases), 23 CTest CLI smoke cases (20 → 23: +3 attractor presets).
+
+**Deferred polish:** points/scatter geometry tier. Strange attractors are conventionally rendered as one dot per iterate; current pipeline only has `polylines` + `chords` so we connect consecutive iterates. The result is readable as orbital density but has a visible "stroke texture" especially on Clifford/de Jong where consecutive iterates jump across the attractor. Adding `GeometryBuffer.points` (renderers draw each as a 1×1 px / tiny SVG `<circle>`) would give the canonical scatter look and would also be reusable for a future phyllotaxis-points mode. ~150 lines across `geometry_buffer.hpp`, both renderers, and the factory.
 
 ---
 

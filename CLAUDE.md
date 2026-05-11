@@ -18,12 +18,11 @@ Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui 
 
 ## Active task
 
-**Phase 8 complete (2026-05-11). Animation system shipped.** `caustic::anim` namespace adds an `Envelope` variant (`Static`/`Linear`/`Sine`), a flat `Target` enum dispatching to 16 animatable parameters across generators / layer transforms / camera via `write_target`, and an `AnimationSpec` carried on `AppState`. The Animation panel exposes target, envelope type + params, duration, scrub/play/pause, and a "Bake SVG sequence" action that writes numbered frames to `$XDG_CONFIG_HOME/caustic/animations/`. 114 doctest cases (102 → 114; +12 envelope/target/tick), 20 CTest CLI smoke cases.
+**Phase 11 complete (2026-05-11). v1.1 generator set finalised — 12 generators across three pipeline tiers.** Clifford, de Jong, and Tinkerbell join the family via `iterate_orbit` (template step iterator with burn-in + divergence detection). The new "iterative orbit as polyline" tier sits alongside the closed-form curve and chord-set tiers. Three bundled presets ship with styling tuned for the polyline-connect-iterates render path. Animation `Target` enum gains 12 new entries (a/b/c/d × 3 attractors) so envelopes can sweep coefficients. 123 doctest cases (114 → 123), 23 CTest CLI smoke cases (20 → 23).
 
-Pick the next phase. Two roughly-independent v1.1 paths plus release:
+Next: **Phase 12 — Polish & release.** README screenshots / animated GIFs, expanded curated preset gallery (see "Nice-to-have polish backlog"), Windows cross-compile, itch.io page. Shortest path to a public 1.0 — all v1.1 generator phases are now closed.
 
-- **Phase 11** — Strange attractors (Clifford / de Jong / Tinkerbell). New iterative-orbit pipeline tier; biggest remaining mathematical generator family.
-- **Phase 12** — Polish & release. README screenshots / animated GIFs, expanded curated preset gallery (see "Nice-to-have polish backlog"), Windows cross-compile, itch.io page. Shortest path to a public 1.0 if the current feature set is enough.
+**Deferred from Phase 11:** points/scatter geometry tier. Strange attractors are conventionally rendered as one dot per iterate; current pipeline only has `polylines` + `chords` so we connect consecutive iterates. Result reads as orbital density but has a visible stroke texture on Clifford / de Jong. Adding `GeometryBuffer.points` (1×1 px in raylib, tiny `<circle>` in SVG) would give the canonical scatter look — ~150 lines across `geometry_buffer.hpp`, both renderers, and the factory. Reusable for a future phyllotaxis-points mode.
 
 **Deferred from Phase 8:** `Keyframed` envelope (arbitrary control points — needs a 2D curve-editor widget, separate UX project); preset-borne animation (`AnimationSpec` lives only in `AppState`, not serialised — adding it would bump the preset schema again).
 
