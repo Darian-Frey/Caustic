@@ -31,10 +31,17 @@ public:
 
     void blit_to_screen() const;
 
+    // Most recent geometry fit-scale (world units → screen pixels, before
+    // applying camera.zoom). Used by interactive overlays (e.g. the
+    // custom-chord nail editor) to convert mouse-screen-coords back to
+    // world coords. Returns 0 if no redraw has happened yet.
+    double last_fit_scale() const { return last_fit_scale_; }
+
 private:
     int width_;
     int height_;
     RenderTexture2D canvas_;
+    double last_fit_scale_ = 0.0;
 };
 
 }  // namespace caustic

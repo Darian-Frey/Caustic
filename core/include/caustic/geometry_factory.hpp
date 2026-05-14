@@ -3,6 +3,8 @@
 #include <algorithm>
 
 #include <caustic/generators/attractors.hpp>
+#include <caustic/generators/custom_chord.hpp>
+#include <caustic/generators/diamond_stack.hpp>
 #include <caustic/generators/epitrochoid.hpp>
 #include <caustic/generators/hypotrochoid.hpp>
 #include <caustic/generators/linear_envelope.hpp>
@@ -97,6 +99,29 @@ inline GeometryBuffer geometry_from_spec(const GeneratorSpec& g, bool coarse = f
             if (!orbit.points.empty()) geo.polylines.push_back(std::move(orbit.points));
             break;
         }
+        case GeneratorType::DiamondStack: {
+            const int n = coarse ? std::max(2, g.dstack.N / 4) : g.dstack.N;
+            const int fans_id =
+                (g.dstack.fans == DiamondStackFans::Vertical)   ? 1 :
+                (g.dstack.fans == DiamondStackFans::Horizontal) ? 2 : 0;
+            geo.chords = diamond_stack(g.dstack.n_modules, n,
+                                       g.dstack.aspect, g.dstack.rotation_rad,
+                                       fans_id);
+            break;
+        }
+        case GeneratorType::CustomChord:
+            geo.chords = custom_chord(g.custom.nails, g.custom.chords);
+            // Per-chord colour overrides — only forward when sizes match, so
+            // partial states (mid-edit) just fall back to the colormap.
+            if (!g.custom.chord_colors.empty() &&
+                g.custom.chord_colors.size() == geo.chords.size()) {
+                geo.chord_color_overrides = g.custom.chord_colors;
+                if (!g.custom.chord_end_colors.empty() &&
+                    g.custom.chord_end_colors.size() == g.custom.chord_colors.size()) {
+                    geo.chord_end_color_overrides = g.custom.chord_end_colors;
+                }
+            }
+            break;
     }
     return geo;
 }

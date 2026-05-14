@@ -28,6 +28,8 @@ enum class GeneratorType {
     Clifford,
     DeJong,
     Tinkerbell,
+    DiamondStack,
+    CustomChord,
 };
 
 struct ModularChordParams {
@@ -137,6 +139,49 @@ struct TinkerbellParams {
     int burn_in = 100;
 };
 
+// Which set of parabolic fans the diamond_stack generator emits per module.
+//   Both       — all 4 (apexes at top, bottom, left, right tips)
+//   Vertical   — only top+bottom apexes  → fills the top/bottom triangles
+//   Horizontal — only left+right apexes  → fills the left/right triangles
+// The Vertical/Horizontal split is the standard recipe for two-colour
+// stacked-diamond compositions: one layer per fan set, each independently
+// styled.
+enum class DiamondStackFans {
+    Both,
+    Vertical,
+    Horizontal,
+};
+
+// Explicit nail positions + chord pairs. Edited in-app via the canvas
+// nail editor (left-click to place / connect), serialised to JSON, and
+// reloaded losslessly. The escape hatch for hand-authored patterns.
+//
+// chord_colors is optional. When non-empty AND its size matches chords.size(),
+// each entry overrides the layer style's colormap for that chord — i.e. the
+// user can paint individual chords. When empty or mismatched, the style's
+// colormap is used.
+//
+// chord_end_colors is optional. When non-empty AND its size matches
+// chord_colors.size(), each chord renders as a gradient from chord_colors[i]
+// (at the chord's first nail) to chord_end_colors[i] (at the second nail).
+struct CustomChordParams {
+    std::vector<Vec2> nails;
+    std::vector<std::pair<int, int>> chords;
+    std::vector<Color> chord_colors;
+    std::vector<Color> chord_end_colors;
+};
+
+// Stacked hourglass / diamond string-art generator. Adjacent modules share
+// tip points, producing the pinched-waist silhouette. See generators/
+// diamond_stack.hpp for the chord-emission math.
+struct DiamondStackParams {
+    int    n_modules    = 3;    // stacked hourglass modules
+    int    N            = 80;   // strings per fan
+    double aspect       = 0.6;  // half_waist_width / half_module_height
+    double rotation_rad = 0.0;
+    DiamondStackFans fans = DiamondStackFans::Both;
+};
+
 struct GeneratorSpec {
     GeneratorType type = GeneratorType::ModularChord;
     ModularChordParams    chord;
@@ -151,6 +196,8 @@ struct GeneratorSpec {
     CliffordParams        clif;
     DeJongParams          dejo;
     TinkerbellParams      tink;
+    DiamondStackParams    dstack;
+    CustomChordParams     custom;
 };
 
 // ---------------------------------------------------------------------------

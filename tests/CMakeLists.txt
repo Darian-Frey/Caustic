@@ -19,6 +19,8 @@ add_executable(test_caustic
     test_linear_envelope.cpp
     test_envelope.cpp
     test_attractors.cpp
+    test_diamond_stack.cpp
+    test_custom_chord.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
@@ -56,7 +58,10 @@ if(TARGET caustic-cli)
                    rose_five_petal superformula_starfish phyllotaxis_sunflower
                    corner_fan envelope_bowtie deltoid hexagram four_bowties rgb_triangle
                    clifford_butterfly de_jong_classic tinkerbell
-                   swoop_pair bowtie_hourglass)
+                   swoop_pair bowtie_hourglass
+                   diamond_stack_classic diamond_stack_two_colour
+                   diamond_star_neon square_grid_2x3
+                   custom_starburst)
         add_test(
             NAME cli_render_${preset}
             COMMAND $<TARGET_FILE:caustic-cli>

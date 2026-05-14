@@ -11,4 +11,5 @@ target_link_libraries(caustic PRIVATE
     caustic::render-svg
     raylib
     imgui
+    tinyfiledialogs
 )

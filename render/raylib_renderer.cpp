@@ -91,6 +91,7 @@ void RaylibRenderer::redraw(const std::vector<LayerRender>& layers,
     if (extent < 1e-9) extent = 1.0;
 
     const double fit_scale = std::min(width_, height_) * 0.45 / extent;
+    last_fit_scale_ = fit_scale;
     const double scale = fit_scale * camera.zoom;
     const double cx = width_ / 2.0;
     const double cy = height_ / 2.0;
@@ -112,13 +113,38 @@ void RaylibRenderer::redraw(const std::vector<LayerRender>& layers,
         if (!L.geometry.chords.empty()) {
             const std::size_t N = L.geometry.chords.size();
             const double max_len = max_chord_length(L.geometry.chords);
+            const bool have_overrides =
+                L.geometry.chord_color_overrides.size() == N;
+            const bool have_gradient =
+                L.geometry.chord_end_color_overrides.size() == N;
             for (std::size_t i = 0; i < N; ++i) {
                 const Chord& c = L.geometry.chords[i];
-                const double tc = remap_cyclic(indexer_value(L.style.color_indexer, c.a, c.b, i, N, max_len), L.style.cyclic);
                 const double tw = remap_cyclic(indexer_value(L.style.stroke.width_indexer, c.a, c.b, i, N, max_len), L.style.cyclic);
-                const Color col = L.style.color_map->at(tc);
+                Color col_a, col_b;
+                if (have_overrides) {
+                    col_a = L.geometry.chord_color_overrides[i];
+                    col_b = have_gradient ? L.geometry.chord_end_color_overrides[i] : col_a;
+                } else {
+                    const double tc = remap_cyclic(indexer_value(L.style.color_indexer, c.a, c.b, i, N, max_len), L.style.cyclic);
+                    col_a = L.style.color_map->at(tc);
+                    col_b = col_a;
+                }
                 const float w = static_cast<float>(lerp_width(L.style.stroke.width_min, L.style.stroke.width_max, tw));
-                DrawLineEx(to_screen(c.a), to_screen(c.b), w, to_raylib(col, L.style.stroke.opacity));
+                if (col_a == col_b) {
+                    DrawLineEx(to_screen(c.a), to_screen(c.b), w, to_raylib(col_a, L.style.stroke.opacity));
+                } else {
+                    // Gradient: subdivide into 16 sub-segments with lerped colour.
+                    constexpr int kSubsegments = 16;
+                    for (int s = 0; s < kSubsegments; ++s) {
+                        const double t0 = static_cast<double>(s)     / kSubsegments;
+                        const double t1 = static_cast<double>(s + 1) / kSubsegments;
+                        const Vec2 p0{c.a.x + (c.b.x - c.a.x) * t0, c.a.y + (c.b.y - c.a.y) * t0};
+                        const Vec2 p1{c.a.x + (c.b.x - c.a.x) * t1, c.a.y + (c.b.y - c.a.y) * t1};
+                        const double tmid = (t0 + t1) * 0.5;
+                        const Color seg_col = lerp(col_a, col_b, tmid);
+                        DrawLineEx(to_screen(p0), to_screen(p1), w, to_raylib(seg_col, L.style.stroke.opacity));
+                    }
+                }
             }
         }
 

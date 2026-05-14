@@ -67,6 +67,8 @@ inline std::string generator_type_to_string(GeneratorType t) {
         case GeneratorType::Clifford:       return "clifford";
         case GeneratorType::DeJong:         return "de_jong";
         case GeneratorType::Tinkerbell:     return "tinkerbell";
+        case GeneratorType::DiamondStack:   return "diamond_stack";
+        case GeneratorType::CustomChord:    return "custom_chord";
     }
     return "modular_chord";
 }
@@ -84,7 +86,25 @@ inline GeneratorType generator_type_from_string(const std::string& s) {
     if (s == "clifford")        return GeneratorType::Clifford;
     if (s == "de_jong")         return GeneratorType::DeJong;
     if (s == "tinkerbell")      return GeneratorType::Tinkerbell;
+    if (s == "diamond_stack")   return GeneratorType::DiamondStack;
+    if (s == "custom_chord")    return GeneratorType::CustomChord;
     throw std::runtime_error("unknown generator type: " + s);
+}
+
+inline std::string diamond_stack_fans_to_string(DiamondStackFans f) {
+    switch (f) {
+        case DiamondStackFans::Both:       return "both";
+        case DiamondStackFans::Vertical:   return "vertical";
+        case DiamondStackFans::Horizontal: return "horizontal";
+    }
+    return "both";
+}
+
+inline DiamondStackFans diamond_stack_fans_from_string(const std::string& s) {
+    if (s == "both")       return DiamondStackFans::Both;
+    if (s == "vertical")   return DiamondStackFans::Vertical;
+    if (s == "horizontal") return DiamondStackFans::Horizontal;
+    throw std::runtime_error("unknown diamond_stack fans value: " + s);
 }
 
 inline std::string colormap_type_to_string(ColorMapType t) {
@@ -189,6 +209,36 @@ inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
             gp["iterations"] = gs.tink.iterations;
             gp["burn_in"]    = gs.tink.burn_in;
             break;
+        case GeneratorType::DiamondStack:
+            gp["n_modules"]    = gs.dstack.n_modules;
+            gp["N"]            = gs.dstack.N;
+            gp["aspect"]       = gs.dstack.aspect;
+            gp["rotation_rad"] = gs.dstack.rotation_rad;
+            gp["fans"]         = diamond_stack_fans_to_string(gs.dstack.fans);
+            break;
+        case GeneratorType::CustomChord: {
+            auto& nails = gp["nails"] = nlohmann::json::array();
+            for (const auto& v : gs.custom.nails) {
+                nails.push_back(nlohmann::json::array({v.x, v.y}));
+            }
+            auto& chords = gp["chords"] = nlohmann::json::array();
+            for (const auto& c : gs.custom.chords) {
+                chords.push_back(nlohmann::json::array({c.first, c.second}));
+            }
+            if (!gs.custom.chord_colors.empty()) {
+                auto& colors = gp["chord_colors"] = nlohmann::json::array();
+                for (const auto& col : gs.custom.chord_colors) {
+                    colors.push_back(color_to_hex(col));
+                }
+            }
+            if (!gs.custom.chord_end_colors.empty()) {
+                auto& colors = gp["chord_end_colors"] = nlohmann::json::array();
+                for (const auto& col : gs.custom.chord_end_colors) {
+                    colors.push_back(color_to_hex(col));
+                }
+            }
+            break;
+        }
     }
 }
 
@@ -290,6 +340,52 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
             gs.tink.iterations = gp.value("iterations", gs.tink.iterations);
             gs.tink.burn_in    = gp.value("burn_in",    gs.tink.burn_in);
             break;
+        case GeneratorType::DiamondStack:
+            gs.dstack.n_modules    = gp.value("n_modules",    gs.dstack.n_modules);
+            gs.dstack.N            = gp.value("N",            gs.dstack.N);
+            gs.dstack.aspect       = gp.value("aspect",       gs.dstack.aspect);
+            gs.dstack.rotation_rad = gp.value("rotation_rad", gs.dstack.rotation_rad);
+            if (gp.contains("fans")) {
+                gs.dstack.fans = diamond_stack_fans_from_string(
+                    gp.at("fans").get<std::string>());
+            }
+            break;
+        case GeneratorType::CustomChord: {
+            gs.custom.nails.clear();
+            gs.custom.chords.clear();
+            gs.custom.chord_colors.clear();
+            if (gp.contains("nails") && gp.at("nails").is_array()) {
+                for (const auto& nv : gp.at("nails")) {
+                    if (nv.is_array() && nv.size() == 2) {
+                        gs.custom.nails.push_back({nv.at(0).get<double>(),
+                                                   nv.at(1).get<double>()});
+                    }
+                }
+            }
+            if (gp.contains("chords") && gp.at("chords").is_array()) {
+                for (const auto& cv : gp.at("chords")) {
+                    if (cv.is_array() && cv.size() == 2) {
+                        gs.custom.chords.push_back({cv.at(0).get<int>(),
+                                                    cv.at(1).get<int>()});
+                    }
+                }
+            }
+            if (gp.contains("chord_colors") && gp.at("chord_colors").is_array()) {
+                for (const auto& col : gp.at("chord_colors")) {
+                    if (col.is_string()) {
+                        gs.custom.chord_colors.push_back(color_from_hex(col.get<std::string>()));
+                    }
+                }
+            }
+            if (gp.contains("chord_end_colors") && gp.at("chord_end_colors").is_array()) {
+                for (const auto& col : gp.at("chord_end_colors")) {
+                    if (col.is_string()) {
+                        gs.custom.chord_end_colors.push_back(color_from_hex(col.get<std::string>()));
+                    }
+                }
+            }
+            break;
+        }
     }
 }
 

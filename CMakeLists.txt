@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(caustic VERSION 0.1.0 LANGUAGES CXX)
+project(caustic VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -79,6 +79,23 @@ if(CAUSTIC_BUILD_APP)
     if(NOT rlimgui_POPULATED)
         FetchContent_Populate(rlimgui)
     endif()
+
+    # tinyfiledialogs — single-file C library that wraps the host OS's native
+    # file picker (zenity/kdialog on Linux, AppKit on macOS, Win32 on Windows).
+    # Zlib licence. App-only dependency (no core or render usage).
+    FetchContent_Declare(
+        tinyfiledialogs
+        GIT_REPOSITORY https://github.com/native-toolkit/libtinyfiledialogs.git
+        GIT_TAG 2.9.3
+    )
+    FetchContent_GetProperties(tinyfiledialogs)
+    if(NOT tinyfiledialogs_POPULATED)
+        FetchContent_Populate(tinyfiledialogs)
+    endif()
+    add_library(tinyfiledialogs STATIC
+        ${tinyfiledialogs_SOURCE_DIR}/tinyfiledialogs.c
+    )
+    target_include_directories(tinyfiledialogs PUBLIC ${tinyfiledialogs_SOURCE_DIR})
 endif()
 
 add_subdirectory(core)

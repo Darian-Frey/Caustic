@@ -169,20 +169,48 @@ void render_layer(std::ostringstream& out, std::size_t idx, const LayerRender& L
 
         const std::size_t N = geo.chords.size();
         const double max_len = max_chord_length(geo.chords);
+        const bool have_overrides = geo.chord_color_overrides.size() == N;
+        const bool have_gradient  = geo.chord_end_color_overrides.size() == N;
 
         for (std::size_t i : order) {
             const Chord& c = geo.chords[i];
-            const double tc = remap_cyclic(indexer_value(style.color_indexer,
-                                                          c.a, c.b, i, N, max_len),
-                                            style.cyclic);
             const double tw = remap_cyclic(indexer_value(style.stroke.width_indexer,
                                                           c.a, c.b, i, N, max_len),
                                             style.cyclic);
-            const Color col = opts.plotter_mode ? Color{} : style.color_map->at(tc);
-            const std::string hex = opts.plotter_mode ? opts.plotter_color : color_to_hex(col);
+            Color col_a, col_b;
+            if (opts.plotter_mode) {
+                col_a = col_b = Color{};
+            } else if (have_overrides) {
+                col_a = geo.chord_color_overrides[i];
+                col_b = have_gradient ? geo.chord_end_color_overrides[i] : col_a;
+            } else {
+                const double tc = remap_cyclic(indexer_value(style.color_indexer,
+                                                              c.a, c.b, i, N, max_len),
+                                                style.cyclic);
+                col_a = style.color_map->at(tc);
+                col_b = col_a;
+            }
             const double w = lerp_width(style.stroke.width_min, style.stroke.width_max, tw);
-            const double op = col.a * style.stroke.opacity;
-            emit_line(out, to_svg(m, c.a), to_svg(m, c.b), hex, w, op, with_opacity);
+
+            if (col_a == col_b) {
+                const std::string hex = opts.plotter_mode ? opts.plotter_color : color_to_hex(col_a);
+                const double op = col_a.a * style.stroke.opacity;
+                emit_line(out, to_svg(m, c.a), to_svg(m, c.b), hex, w, op, with_opacity);
+            } else {
+                // Gradient: subdivide into 16 sub-segments with lerped colour.
+                constexpr int kSubsegments = 16;
+                for (int s = 0; s < kSubsegments; ++s) {
+                    const double t0 = static_cast<double>(s)     / kSubsegments;
+                    const double t1 = static_cast<double>(s + 1) / kSubsegments;
+                    const Vec2 p0{c.a.x + (c.b.x - c.a.x) * t0, c.a.y + (c.b.y - c.a.y) * t0};
+                    const Vec2 p1{c.a.x + (c.b.x - c.a.x) * t1, c.a.y + (c.b.y - c.a.y) * t1};
+                    const double tmid = (t0 + t1) * 0.5;
+                    const Color seg_col = lerp(col_a, col_b, tmid);
+                    const std::string hex = color_to_hex(seg_col);
+                    const double op = seg_col.a * style.stroke.opacity;
+                    emit_line(out, to_svg(m, p0), to_svg(m, p1), hex, w, op, with_opacity);
+                }
+            }
         }
     }
 

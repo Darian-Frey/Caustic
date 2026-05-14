@@ -46,6 +46,9 @@ enum class Target {
     Tinkerbell_b,
     Tinkerbell_c,
     Tinkerbell_d,
+    // Diamond stack
+    DiamondStack_aspect,
+    DiamondStack_rotation,
     // Per-layer transform
     LayerRotate,
     LayerScale,
@@ -80,6 +83,8 @@ inline const char* target_name(Target t) {
         case Target::Tinkerbell_b:           return "tinkerbell: b";
         case Target::Tinkerbell_c:           return "tinkerbell: c";
         case Target::Tinkerbell_d:           return "tinkerbell: d";
+        case Target::DiamondStack_aspect:    return "diamond stack: aspect";
+        case Target::DiamondStack_rotation:  return "diamond stack: rotation";
         case Target::LayerRotate:            return "layer: rotate";
         case Target::LayerScale:             return "layer: scale";
         case Target::LayerTranslateX:        return "layer: translate x";
@@ -165,6 +170,13 @@ inline void write_target(Target tgt, double value, Preset& p, int layer_idx) {
             break;
         case Target::Tinkerbell_d:
             if (layer_in_bounds()) p.scene.layers[layer_idx].generator.tink.d = value;
+            break;
+
+        case Target::DiamondStack_aspect:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.dstack.aspect = value;
+            break;
+        case Target::DiamondStack_rotation:
+            if (layer_in_bounds()) p.scene.layers[layer_idx].generator.dstack.rotation_rad = value;
             break;
 
         case Target::LayerRotate:
