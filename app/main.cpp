@@ -74,7 +74,55 @@ const char* const kGeneratorNames[] = {
 // Nail-editor mode for the CustomChord generator. AddNail = left-click on
 // canvas drops a nail at the world coord under the cursor. AddChord = first
 // left-click selects a nail, second click on a different nail emits a chord.
-enum class NailEditMode { Off, AddNail, AddChord };
+// MoveNail = left-click-and-hold on an existing nail drags it to a new
+// position; release drops it. Honours snap-to-grid like AddNail.
+// RecolourChord = left-click on an existing chord rewrites its start/end
+// colours to the panel's active picker values.
+// Select = build a multi-item selection: click an item to select it (Shift
+// to toggle/add), drag in empty space for a rubber-band rectangle. Delete
+// key removes all selected; "Recolour selected" button applies the active
+// colours to all selected chords at once.
+//
+// Right-click is mode-independent: it deletes whatever the cursor is over
+// (nail first if both a nail and a chord are in range).
+enum class NailEditMode { Off, AddNail, AddChord, MoveNail, RecolourChord, Select };
+
+// Delete the nail at `idx` from a CustomChordParams. Drops any chord that
+// referenced it; re-indexes the remaining chords so indices above `idx` shift
+// down by one. Keeps chord_colors / chord_end_colors aligned with chords.
+inline void delete_nail_in_custom(caustic::CustomChordParams& c, int idx) {
+    if (idx < 0 || idx >= static_cast<int>(c.nails.size())) return;
+    c.nails.erase(c.nails.begin() + idx);
+    std::vector<std::pair<int, int>> kept_chords;
+    std::vector<caustic::Color>      kept_colors;
+    std::vector<caustic::Color>      kept_end_colors;
+    const bool have_colors     = c.chord_colors.size()     == c.chords.size();
+    const bool have_end_colors = c.chord_end_colors.size() == c.chords.size();
+    for (std::size_t k = 0; k < c.chords.size(); ++k) {
+        auto p = c.chords[k];
+        if (p.first == idx || p.second == idx) continue;
+        if (p.first  > idx) --p.first;
+        if (p.second > idx) --p.second;
+        kept_chords.push_back(p);
+        if (have_colors)     kept_colors.push_back(c.chord_colors[k]);
+        if (have_end_colors) kept_end_colors.push_back(c.chord_end_colors[k]);
+    }
+    c.chords = std::move(kept_chords);
+    if (have_colors)     c.chord_colors     = std::move(kept_colors);
+    if (have_end_colors) c.chord_end_colors = std::move(kept_end_colors);
+}
+
+// Delete the chord at `idx` (and its corresponding colour entries).
+inline void delete_chord_in_custom(caustic::CustomChordParams& c, int idx) {
+    if (idx < 0 || idx >= static_cast<int>(c.chords.size())) return;
+    c.chords.erase(c.chords.begin() + idx);
+    if (idx < static_cast<int>(c.chord_colors.size())) {
+        c.chord_colors.erase(c.chord_colors.begin() + idx);
+    }
+    if (idx < static_cast<int>(c.chord_end_colors.size())) {
+        c.chord_end_colors.erase(c.chord_end_colors.begin() + idx);
+    }
+}
 
 const char* const kIndexerNames[] = {
     "chord index", "chord length", "angle", "curve t",
@@ -108,12 +156,30 @@ struct AppState {
     // layer's generator is CustomChord and nail_edit_mode != Off.
     NailEditMode nail_edit_mode = NailEditMode::Off;
     int nail_chord_first = -1;       // first nail clicked in AddChord mode; -1 = none
+    int nail_dragging_idx = -1;      // nail being dragged in MoveNail mode; -1 = none
+
+    // Select mode state. Sorted vectors of selected indices; rubber_band_active
+    // tracks an in-progress area-select drag started in empty space.
+    std::vector<int> selected_nails;
+    std::vector<int> selected_chords;
+    bool rubber_band_active = false;
+    Vector2 rubber_band_start_screen{0.0f, 0.0f};
     bool nail_grid_visible = false;  // draw a faint grid overlay in edit view
     bool nail_grid_snap = false;     // snap newly-placed nails to grid intersections
     double nail_grid_spacing = 0.1;  // world-units between grid lines
     bool nail_numbers_visible = true; // draw the index label above each nail
     caustic::Color nail_active_color    {0.9, 0.9, 0.9, 1.0};  // chord start colour
     caustic::Color nail_active_color_end{0.9, 0.9, 0.9, 1.0};  // chord end colour (== start = solid)
+
+    // Undo/redo for the *current layer's* CustomChordParams only. Snapshot-
+    // based: every atomic edit (add nail, add chord, delete, recolour, clear)
+    // pushes the pre-edit state onto nail_undo_stack and clears nail_redo_stack.
+    // Stacks are cleared when the current layer or generator type changes — no
+    // cross-layer history, keeps things predictable.
+    std::vector<caustic::CustomChordParams> nail_undo_stack;
+    std::vector<caustic::CustomChordParams> nail_redo_stack;
+    int nail_history_last_layer_idx = -1;
+    caustic::GeneratorType nail_history_last_generator_type = caustic::GeneratorType::ModularChord;
 
     // Ensure preset has at least one layer; clamp current_layer_idx within bounds.
     caustic::Layer& current_layer() {
@@ -382,19 +448,70 @@ void render_param_panel(AppState& state) {
         }
         case caustic::GeneratorType::CustomChord: {
             auto& c = p.generator.custom;
+
+            // Snapshot the current params onto the undo stack and clear the
+            // redo stack. Called *before* any mutation. Capped at 50 entries.
+            auto push_undo = [&]() {
+                state.nail_undo_stack.push_back(c);
+                if (state.nail_undo_stack.size() > 50)
+                    state.nail_undo_stack.erase(state.nail_undo_stack.begin());
+                state.nail_redo_stack.clear();
+            };
+            auto do_undo = [&]() {
+                if (state.nail_undo_stack.empty()) return;
+                state.nail_redo_stack.push_back(c);
+                c = std::move(state.nail_undo_stack.back());
+                state.nail_undo_stack.pop_back();
+                state.nail_chord_first = -1;
+                state.dirty = true;
+            };
+            auto do_redo = [&]() {
+                if (state.nail_redo_stack.empty()) return;
+                state.nail_undo_stack.push_back(c);
+                c = std::move(state.nail_redo_stack.back());
+                state.nail_redo_stack.pop_back();
+                state.nail_chord_first = -1;
+                state.dirty = true;
+            };
+
             ImGui::Text("Nails: %d   Chords: %d",
                         static_cast<int>(c.nails.size()),
                         static_cast<int>(c.chords.size()));
             ImGui::Separator();
+
+            // Undo / Redo
+            ImGui::BeginDisabled(state.nail_undo_stack.empty());
+            if (ImGui::Button("Undo")) do_undo();
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::BeginDisabled(state.nail_redo_stack.empty());
+            if (ImGui::Button("Redo")) do_redo();
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::TextDisabled("Ctrl+Z / Ctrl+Y");
+            ImGui::Separator();
+
             ImGui::Text("Edit mode:");
             int mode_idx = static_cast<int>(state.nail_edit_mode);
-            if (ImGui::RadioButton("off",          &mode_idx, 0)) { state.nail_edit_mode = NailEditMode::Off;      state.nail_chord_first = -1; }
+            auto clear_transient = [&]() {
+                state.nail_chord_first = -1;
+                state.nail_dragging_idx = -1;
+                state.rubber_band_active = false;
+            };
+            if (ImGui::RadioButton("off",            &mode_idx, 0)) { state.nail_edit_mode = NailEditMode::Off;           clear_transient(); }
             ImGui::SameLine();
-            if (ImGui::RadioButton("add nail",     &mode_idx, 1)) { state.nail_edit_mode = NailEditMode::AddNail;  state.nail_chord_first = -1; }
+            if (ImGui::RadioButton("add nail",       &mode_idx, 1)) { state.nail_edit_mode = NailEditMode::AddNail;       clear_transient(); }
             ImGui::SameLine();
-            if (ImGui::RadioButton("add chord",    &mode_idx, 2)) { state.nail_edit_mode = NailEditMode::AddChord; state.nail_chord_first = -1; }
+            if (ImGui::RadioButton("add chord",      &mode_idx, 2)) { state.nail_edit_mode = NailEditMode::AddChord;      clear_transient(); }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("move nail",      &mode_idx, 3)) { state.nail_edit_mode = NailEditMode::MoveNail;      clear_transient(); }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("recolour chord", &mode_idx, 4)) { state.nail_edit_mode = NailEditMode::RecolourChord; clear_transient(); }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("select",         &mode_idx, 5)) { state.nail_edit_mode = NailEditMode::Select;        clear_transient(); }
 
             if (ImGui::Button("Delete last nail") && !c.nails.empty()) {
+                push_undo();
                 const int idx = static_cast<int>(c.nails.size()) - 1;
                 c.nails.pop_back();
                 // Drop any chord (and its colours) that referenced this nail.
@@ -421,6 +538,7 @@ void render_param_panel(AppState& state) {
             }
             ImGui::SameLine();
             if (ImGui::Button("Delete last chord") && !c.chords.empty()) {
+                push_undo();
                 c.chords.pop_back();
                 if (!c.chord_colors.empty())     c.chord_colors.pop_back();
                 if (!c.chord_end_colors.empty()) c.chord_end_colors.pop_back();
@@ -428,12 +546,58 @@ void render_param_panel(AppState& state) {
             }
             ImGui::SameLine();
             if (ImGui::Button("Clear all")) {
+                push_undo();
                 c.nails.clear();
                 c.chords.clear();
                 c.chord_colors.clear();
                 c.chord_end_colors.clear();
                 state.nail_chord_first = -1;
+                state.selected_nails.clear();
+                state.selected_chords.clear();
                 state.dirty = true;
+            }
+
+            // Selection summary + actions (Select mode).
+            if (!state.selected_nails.empty() || !state.selected_chords.empty()) {
+                ImGui::TextDisabled("Selected: %d nails, %d chords",
+                                    static_cast<int>(state.selected_nails.size()),
+                                    static_cast<int>(state.selected_chords.size()));
+                if (ImGui::Button("Delete selected")) {
+                    push_undo();
+                    // Sort descending so erase-by-index doesn't shift remaining indices.
+                    std::sort(state.selected_chords.begin(), state.selected_chords.end(),
+                              std::greater<int>());
+                    for (int idx : state.selected_chords) delete_chord_in_custom(c, idx);
+                    std::sort(state.selected_nails.begin(), state.selected_nails.end(),
+                              std::greater<int>());
+                    for (int idx : state.selected_nails) delete_nail_in_custom(c, idx);
+                    state.selected_nails.clear();
+                    state.selected_chords.clear();
+                    state.nail_chord_first = -1;
+                    state.dirty = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Recolour selected") && !state.selected_chords.empty()) {
+                    push_undo();
+                    if (c.chord_colors.size() != c.chords.size()) {
+                        c.chord_colors.assign(c.chords.size(), state.nail_active_color);
+                    }
+                    if (c.chord_end_colors.size() != c.chords.size()) {
+                        c.chord_end_colors.assign(c.chords.size(), state.nail_active_color_end);
+                    }
+                    for (int idx : state.selected_chords) {
+                        if (idx >= 0 && idx < static_cast<int>(c.chord_colors.size())) {
+                            c.chord_colors[idx]     = state.nail_active_color;
+                            c.chord_end_colors[idx] = state.nail_active_color_end;
+                        }
+                    }
+                    state.dirty = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Clear selection")) {
+                    state.selected_nails.clear();
+                    state.selected_chords.clear();
+                }
             }
 
             ImGui::Separator();
@@ -459,12 +623,14 @@ void render_param_panel(AppState& state) {
                 state.nail_active_color_end.a = 1.0;
             }
             if (ImGui::Button("Recolour all")) {
+                push_undo();
                 c.chord_colors.assign(c.chords.size(), state.nail_active_color);
                 c.chord_end_colors.assign(c.chords.size(), state.nail_active_color_end);
                 state.dirty = true;
             }
             ImGui::SameLine();
             if (ImGui::Button("Clear chord colours (use style colormap)")) {
+                push_undo();
                 c.chord_colors.clear();
                 c.chord_end_colors.clear();
                 state.dirty = true;
@@ -481,6 +647,10 @@ void render_param_panel(AppState& state) {
 
             ImGui::TextDisabled("add nail: left-click on canvas drops a nail");
             ImGui::TextDisabled("add chord: left-click two nails to connect them — new chord takes active colours (start, end)");
+            ImGui::TextDisabled("move nail: left-click + hold on a nail, drag to reposition (snap honoured)");
+            ImGui::TextDisabled("recolour chord: left-click on an existing chord to apply active start/end colours");
+            ImGui::TextDisabled("select: click an item to select it (Shift+click toggles); drag empty space for rubber-band; Delete removes");
+            ImGui::TextDisabled("Right-click (any mode): erase the nail or chord under the cursor");
             ImGui::TextDisabled("Edit mode = off: left-click drag pans the canvas (or use middle-click drag).");
             ImGui::TextDisabled("Save the layer as a preset to keep the pattern.");
             break;
@@ -1069,13 +1239,12 @@ int main() {
                 state.dirty = true;
             }
 
-            // Custom-chord nail editor — only active when current layer is
-            // CustomChord and mode != Off. Left-click in the canvas places a
-            // nail (AddNail) or selects/connects nails (AddChord).
+            // Custom-chord nail editor — active whenever the current layer is
+            // CustomChord. Left-click does mode-specific work (AddNail,
+            // AddChord, MoveNail, RecolourChord). Right-click is mode-
+            // independent: it deletes the nail (or chord) under the cursor.
             auto& edit_layer = state.current_layer();
-            if (edit_layer.generator.type == caustic::GeneratorType::CustomChord &&
-                state.nail_edit_mode != NailEditMode::Off &&
-                IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (edit_layer.generator.type == caustic::GeneratorType::CustomChord) {
                 const Vector2 m = GetMousePosition();
                 const double cx = GetScreenWidth() / 2.0;
                 const double cy = GetScreenHeight() / 2.0;
@@ -1084,39 +1253,240 @@ int main() {
                     double world_x = (m.x - cx - state.preset.camera.pan_x_px) / scale;
                     double world_y = -((m.y - cy - state.preset.camera.pan_y_px) / scale);
                     auto& custom = edit_layer.generator.custom;
-                    if (state.nail_edit_mode == NailEditMode::AddNail) {
-                        if (state.nail_grid_snap && state.nail_grid_spacing > 1e-6) {
-                            world_x = std::round(world_x / state.nail_grid_spacing) * state.nail_grid_spacing;
-                            world_y = std::round(world_y / state.nail_grid_spacing) * state.nail_grid_spacing;
-                        }
-                        custom.nails.push_back({world_x, world_y});
-                        state.dirty = true;
-                    } else if (state.nail_edit_mode == NailEditMode::AddChord) {
-                        // Find nearest nail within a screen-pixel threshold.
+                    auto push_undo_canvas = [&]() {
+                        state.nail_undo_stack.push_back(custom);
+                        if (state.nail_undo_stack.size() > 50)
+                            state.nail_undo_stack.erase(state.nail_undo_stack.begin());
+                        state.nail_redo_stack.clear();
+                    };
+                    auto find_nail_near = [&](double x, double y) -> int {
                         const double hit_radius_world = 12.0 / scale;
                         int best = -1;
                         double best_d2 = hit_radius_world * hit_radius_world;
                         for (int i = 0; i < static_cast<int>(custom.nails.size()); ++i) {
-                            const double dx = custom.nails[i].x - world_x;
-                            const double dy = custom.nails[i].y - world_y;
+                            const double dx = custom.nails[i].x - x;
+                            const double dy = custom.nails[i].y - y;
                             const double d2 = dx * dx + dy * dy;
                             if (d2 < best_d2) { best_d2 = d2; best = i; }
                         }
-                        if (best >= 0) {
-                            if (state.nail_chord_first < 0) {
-                                state.nail_chord_first = best;
-                            } else if (state.nail_chord_first != best) {
-                                custom.chords.push_back({state.nail_chord_first, best});
-                                custom.chord_colors.push_back(state.nail_active_color);
-                                custom.chord_end_colors.push_back(state.nail_active_color_end);
-                                state.nail_chord_first = -1;
-                                state.dirty = true;
+                        return best;
+                    };
+                    auto find_chord_near = [&](double x, double y) -> int {
+                        const double hit_world = 10.0 / scale;
+                        int best = -1;
+                        double best_d = hit_world;
+                        const int n_nails = static_cast<int>(custom.nails.size());
+                        for (int i = 0; i < static_cast<int>(custom.chords.size()); ++i) {
+                            const auto& cp = custom.chords[i];
+                            if (cp.first < 0 || cp.first >= n_nails) continue;
+                            if (cp.second < 0 || cp.second >= n_nails) continue;
+                            const caustic::Vec2 a = custom.nails[cp.first];
+                            const caustic::Vec2 b = custom.nails[cp.second];
+                            const double dx = b.x - a.x;
+                            const double dy = b.y - a.y;
+                            const double len2 = dx*dx + dy*dy;
+                            double d;
+                            if (len2 < 1e-12) {
+                                const double ex = x - a.x, ey = y - a.y;
+                                d = std::sqrt(ex*ex + ey*ey);
                             } else {
-                                // Same nail clicked twice — cancel selection.
-                                state.nail_chord_first = -1;
+                                double t = ((x - a.x) * dx + (y - a.y) * dy) / len2;
+                                t = std::clamp(t, 0.0, 1.0);
+                                const double cx_ = a.x + t * dx;
+                                const double cy_ = a.y + t * dy;
+                                const double ex = x - cx_, ey = y - cy_;
+                                d = std::sqrt(ex*ex + ey*ey);
+                            }
+                            if (d < best_d) { best_d = d; best = i; }
+                        }
+                        return best;
+                    };
+                    auto maybe_snap = [&](double& x, double& y) {
+                        if (state.nail_grid_snap && state.nail_grid_spacing > 1e-6) {
+                            x = std::round(x / state.nail_grid_spacing) * state.nail_grid_spacing;
+                            y = std::round(y / state.nail_grid_spacing) * state.nail_grid_spacing;
+                        }
+                    };
+
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                        if (state.nail_edit_mode == NailEditMode::AddNail) {
+                            maybe_snap(world_x, world_y);
+                            push_undo_canvas();
+                            custom.nails.push_back({world_x, world_y});
+                            state.dirty = true;
+                        } else if (state.nail_edit_mode == NailEditMode::AddChord) {
+                            const int best = find_nail_near(world_x, world_y);
+                            if (best >= 0) {
+                                if (state.nail_chord_first < 0) {
+                                    state.nail_chord_first = best;
+                                } else if (state.nail_chord_first != best) {
+                                    push_undo_canvas();
+                                    custom.chords.push_back({state.nail_chord_first, best});
+                                    custom.chord_colors.push_back(state.nail_active_color);
+                                    custom.chord_end_colors.push_back(state.nail_active_color_end);
+                                    state.nail_chord_first = -1;
+                                    state.dirty = true;
+                                } else {
+                                    // Same nail clicked twice — cancel selection.
+                                    state.nail_chord_first = -1;
+                                }
+                            }
+                        } else if (state.nail_edit_mode == NailEditMode::MoveNail) {
+                            const int best = find_nail_near(world_x, world_y);
+                            if (best >= 0) {
+                                push_undo_canvas();
+                                state.nail_dragging_idx = best;
+                            }
+                        } else if (state.nail_edit_mode == NailEditMode::RecolourChord) {
+                            const int idx = find_chord_near(world_x, world_y);
+                            if (idx >= 0) {
+                                push_undo_canvas();
+                                // Pad the colour arrays so they line up with
+                                // chords.size() if they were empty / partial.
+                                if (custom.chord_colors.size() != custom.chords.size()) {
+                                    custom.chord_colors.assign(custom.chords.size(),
+                                                                state.nail_active_color);
+                                }
+                                if (custom.chord_end_colors.size() != custom.chords.size()) {
+                                    custom.chord_end_colors.assign(custom.chords.size(),
+                                                                    state.nail_active_color_end);
+                                }
+                                custom.chord_colors[idx]     = state.nail_active_color;
+                                custom.chord_end_colors[idx] = state.nail_active_color_end;
+                                state.dirty = true;
+                            }
+                        } else if (state.nail_edit_mode == NailEditMode::Select) {
+                            const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+                            const int nail_hit = find_nail_near(world_x, world_y);
+                            const int chord_hit = (nail_hit < 0) ? find_chord_near(world_x, world_y) : -1;
+                            auto toggle_in = [](std::vector<int>& sel, int idx) {
+                                auto it = std::find(sel.begin(), sel.end(), idx);
+                                if (it == sel.end()) sel.push_back(idx);
+                                else sel.erase(it);
+                            };
+                            if (nail_hit >= 0) {
+                                if (!shift) {
+                                    state.selected_nails.clear();
+                                    state.selected_chords.clear();
+                                    state.selected_nails.push_back(nail_hit);
+                                } else {
+                                    toggle_in(state.selected_nails, nail_hit);
+                                }
+                            } else if (chord_hit >= 0) {
+                                if (!shift) {
+                                    state.selected_nails.clear();
+                                    state.selected_chords.clear();
+                                    state.selected_chords.push_back(chord_hit);
+                                } else {
+                                    toggle_in(state.selected_chords, chord_hit);
+                                }
+                            } else {
+                                // Empty space — start rubber-band area select.
+                                state.rubber_band_active = true;
+                                state.rubber_band_start_screen = m;
                             }
                         }
                     }
+
+                    // While the mouse button is held in MoveNail mode and we
+                    // grabbed a nail on press, update its position each frame.
+                    if (state.nail_edit_mode == NailEditMode::MoveNail &&
+                        state.nail_dragging_idx >= 0 &&
+                        state.nail_dragging_idx < static_cast<int>(custom.nails.size()) &&
+                        IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+                        maybe_snap(world_x, world_y);
+                        caustic::Vec2& target = custom.nails[state.nail_dragging_idx];
+                        if (target.x != world_x || target.y != world_y) {
+                            target = {world_x, world_y};
+                            state.dirty = true;
+                        }
+                    }
+
+                    // Right-click: erase whatever's under the cursor. Nail
+                    // hits take priority over chord hits since the hit radius
+                    // is smaller and the nail is the more "primitive" target.
+                    // Mode-independent — works even in mode Off. Ignored while
+                    // a rubber-band drag is in progress.
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && !state.rubber_band_active) {
+                        const int nail_idx = find_nail_near(world_x, world_y);
+                        if (nail_idx >= 0) {
+                            push_undo_canvas();
+                            delete_nail_in_custom(custom, nail_idx);
+                            state.nail_chord_first = -1;
+                            state.nail_dragging_idx = -1;
+                            // Drop any selection entry that referenced this index;
+                            // re-index entries with > nail_idx.
+                            std::vector<int> ns;
+                            for (int s : state.selected_nails) {
+                                if (s == nail_idx) continue;
+                                ns.push_back(s > nail_idx ? s - 1 : s);
+                            }
+                            state.selected_nails = std::move(ns);
+                            state.dirty = true;
+                        } else {
+                            const int chord_idx = find_chord_near(world_x, world_y);
+                            if (chord_idx >= 0) {
+                                push_undo_canvas();
+                                delete_chord_in_custom(custom, chord_idx);
+                                std::vector<int> cs;
+                                for (int s : state.selected_chords) {
+                                    if (s == chord_idx) continue;
+                                    cs.push_back(s > chord_idx ? s - 1 : s);
+                                }
+                                state.selected_chords = std::move(cs);
+                                state.dirty = true;
+                            }
+                        }
+                    }
+
+                    // Rubber-band release: when in Select mode and a rubber-
+                    // band is in progress, releasing the left button finalises
+                    // the area select.
+                    if (state.nail_edit_mode == NailEditMode::Select &&
+                        state.rubber_band_active &&
+                        IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+                        const double start_wx = (state.rubber_band_start_screen.x - cx - state.preset.camera.pan_x_px) / scale;
+                        const double start_wy = -((state.rubber_band_start_screen.y - cy - state.preset.camera.pan_y_px) / scale);
+                        const double xmin = std::min(start_wx, world_x);
+                        const double xmax = std::max(start_wx, world_x);
+                        const double ymin = std::min(start_wy, world_y);
+                        const double ymax = std::max(start_wy, world_y);
+                        const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+                        if (!shift) {
+                            state.selected_nails.clear();
+                            state.selected_chords.clear();
+                        }
+                        auto already_selected = [](const std::vector<int>& v, int idx) {
+                            return std::find(v.begin(), v.end(), idx) != v.end();
+                        };
+                        for (int i = 0; i < static_cast<int>(custom.nails.size()); ++i) {
+                            const auto& n = custom.nails[i];
+                            if (n.x >= xmin && n.x <= xmax && n.y >= ymin && n.y <= ymax) {
+                                if (!already_selected(state.selected_nails, i)) {
+                                    state.selected_nails.push_back(i);
+                                }
+                            }
+                        }
+                        const int n_nails = static_cast<int>(custom.nails.size());
+                        for (int i = 0; i < static_cast<int>(custom.chords.size()); ++i) {
+                            const auto& cp = custom.chords[i];
+                            if (cp.first < 0 || cp.first >= n_nails) continue;
+                            if (cp.second < 0 || cp.second >= n_nails) continue;
+                            const double mxw = (custom.nails[cp.first].x + custom.nails[cp.second].x) * 0.5;
+                            const double myw = (custom.nails[cp.first].y + custom.nails[cp.second].y) * 0.5;
+                            if (mxw >= xmin && mxw <= xmax && myw >= ymin && myw <= ymax) {
+                                if (!already_selected(state.selected_chords, i)) {
+                                    state.selected_chords.push_back(i);
+                                }
+                            }
+                        }
+                        state.rubber_band_active = false;
+                    }
+                }
+
+                if (state.nail_edit_mode == NailEditMode::MoveNail &&
+                    IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+                    state.nail_dragging_idx = -1;
                 }
             }
         }
@@ -1138,6 +1508,64 @@ int main() {
             if (IsKeyPressed(KEY_F11)) {
                 ToggleBorderlessWindowed();
                 // The resize will be picked up next frame by IsWindowResized().
+            }
+
+            // Delete key: remove all selected nails + chords (CustomChord).
+            if (IsKeyPressed(KEY_DELETE) &&
+                state.current_layer().generator.type == caustic::GeneratorType::CustomChord &&
+                (!state.selected_nails.empty() || !state.selected_chords.empty())) {
+                auto& cc = state.current_layer().generator.custom;
+                state.nail_undo_stack.push_back(cc);
+                if (state.nail_undo_stack.size() > 50)
+                    state.nail_undo_stack.erase(state.nail_undo_stack.begin());
+                state.nail_redo_stack.clear();
+                std::sort(state.selected_chords.begin(), state.selected_chords.end(), std::greater<int>());
+                for (int idx : state.selected_chords) delete_chord_in_custom(cc, idx);
+                std::sort(state.selected_nails.begin(), state.selected_nails.end(), std::greater<int>());
+                for (int idx : state.selected_nails) delete_nail_in_custom(cc, idx);
+                state.selected_nails.clear();
+                state.selected_chords.clear();
+                state.nail_chord_first = -1;
+                state.dirty = true;
+            }
+
+            // Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z) for CustomChord undo/redo.
+            const bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+            const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+            if (ctrl && state.current_layer().generator.type == caustic::GeneratorType::CustomChord) {
+                auto& cc = state.current_layer().generator.custom;
+                if (IsKeyPressed(KEY_Z) && !shift && !state.nail_undo_stack.empty()) {
+                    state.nail_redo_stack.push_back(cc);
+                    cc = std::move(state.nail_undo_stack.back());
+                    state.nail_undo_stack.pop_back();
+                    state.nail_chord_first = -1;
+                    state.dirty = true;
+                } else if ((IsKeyPressed(KEY_Y) || (IsKeyPressed(KEY_Z) && shift)) &&
+                           !state.nail_redo_stack.empty()) {
+                    state.nail_undo_stack.push_back(cc);
+                    cc = std::move(state.nail_redo_stack.back());
+                    state.nail_redo_stack.pop_back();
+                    state.nail_chord_first = -1;
+                    state.dirty = true;
+                }
+            }
+        }
+
+        // Clear undo/redo when the active layer or its generator type changes —
+        // history doesn't follow you across layers, keeps the behaviour
+        // predictable.
+        {
+            const int cur_idx = state.current_layer_idx;
+            const auto cur_type = state.current_layer().generator.type;
+            if (cur_idx != state.nail_history_last_layer_idx ||
+                cur_type != state.nail_history_last_generator_type) {
+                state.nail_undo_stack.clear();
+                state.nail_redo_stack.clear();
+                state.selected_nails.clear();
+                state.selected_chords.clear();
+                state.rubber_band_active = false;
+                state.nail_history_last_layer_idx = cur_idx;
+                state.nail_history_last_generator_type = cur_type;
             }
         }
 
@@ -1216,20 +1644,93 @@ int main() {
                     }
 
                     const auto& custom = edit_layer_for_overlay.generator.custom;
-                    for (int i = 0; i < static_cast<int>(custom.nails.size()); ++i) {
+
+                    // Highlight selected chords first (so they sit under the
+                    // nail circles drawn next).
+                    auto in_sel = [](const std::vector<int>& v, int idx) {
+                        return std::find(v.begin(), v.end(), idx) != v.end();
+                    };
+                    const int n_nails = static_cast<int>(custom.nails.size());
+                    for (int idx : state.selected_chords) {
+                        if (idx < 0 || idx >= static_cast<int>(custom.chords.size())) continue;
+                        const auto& cp = custom.chords[idx];
+                        if (cp.first < 0 || cp.first >= n_nails) continue;
+                        if (cp.second < 0 || cp.second >= n_nails) continue;
+                        const float ax = static_cast<float>(cx + state.preset.camera.pan_x_px + custom.nails[cp.first].x  * scale);
+                        const float ay = static_cast<float>(cy + state.preset.camera.pan_y_px - custom.nails[cp.first].y  * scale);
+                        const float bx = static_cast<float>(cx + state.preset.camera.pan_x_px + custom.nails[cp.second].x * scale);
+                        const float by = static_cast<float>(cy + state.preset.camera.pan_y_px - custom.nails[cp.second].y * scale);
+                        DrawLineEx({ax, ay}, {bx, by}, 4.0f, ::Color{255, 230, 80, 130});
+                    }
+
+                    // AddChord mode preview line: when the user has clicked
+                    // the first nail and is choosing the second, draw a live
+                    // gradient line from that nail to the cursor so the next
+                    // chord's appearance is visible before the second click.
+                    if (state.nail_edit_mode == NailEditMode::AddChord &&
+                        state.nail_chord_first >= 0 &&
+                        state.nail_chord_first < n_nails) {
+                        const auto& origin = custom.nails[state.nail_chord_first];
+                        const float ax = static_cast<float>(cx + state.preset.camera.pan_x_px + origin.x * scale);
+                        const float ay = static_cast<float>(cy + state.preset.camera.pan_y_px - origin.y * scale);
+                        const Vector2 mp = GetMousePosition();
+                        const auto& ca = state.nail_active_color;
+                        const auto& cb = state.nail_active_color_end;
+                        constexpr int kPreviewSegs = 8;
+                        for (int s = 0; s < kPreviewSegs; ++s) {
+                            const float t0 = static_cast<float>(s)     / kPreviewSegs;
+                            const float t1 = static_cast<float>(s + 1) / kPreviewSegs;
+                            const float x0 = ax + (mp.x - ax) * t0;
+                            const float y0 = ay + (mp.y - ay) * t0;
+                            const float x1 = ax + (mp.x - ax) * t1;
+                            const float y1 = ay + (mp.y - ay) * t1;
+                            const double tm = (t0 + t1) * 0.5;
+                            const auto byte = [](double v) -> unsigned char {
+                                return static_cast<unsigned char>(std::clamp(v * 255.0 + 0.5, 0.0, 255.0));
+                            };
+                            const ::Color col {
+                                byte(ca.r + (cb.r - ca.r) * tm),
+                                byte(ca.g + (cb.g - ca.g) * tm),
+                                byte(ca.b + (cb.b - ca.b) * tm),
+                                140
+                            };
+                            DrawLineEx({x0, y0}, {x1, y1}, 2.0f, col);
+                        }
+                    }
+
+                    for (int i = 0; i < n_nails; ++i) {
                         const float sx = static_cast<float>(cx + state.preset.camera.pan_x_px + custom.nails[i].x * scale);
                         const float sy = static_cast<float>(cy + state.preset.camera.pan_y_px - custom.nails[i].y * scale);
-                        const bool selected = (i == state.nail_chord_first);
-                        const ::Color fill = selected
+                        const bool first_clicked = (i == state.nail_chord_first);
+                        const bool is_selected   = in_sel(state.selected_nails, i);
+                        const ::Color fill = first_clicked
                             ? ::Color{255, 200, 60, 255}
                             : ::Color{120, 200, 255, 220};
-                        DrawCircle(static_cast<int>(sx), static_cast<int>(sy), selected ? 7.0f : 5.0f, fill);
-                        DrawCircleLines(static_cast<int>(sx), static_cast<int>(sy), selected ? 7.0f : 5.0f, ::Color{20, 20, 20, 255});
+                        const float r = first_clicked ? 7.0f : 5.0f;
+                        DrawCircle(static_cast<int>(sx), static_cast<int>(sy), r, fill);
+                        DrawCircleLines(static_cast<int>(sx), static_cast<int>(sy), r, ::Color{20, 20, 20, 255});
+                        if (is_selected) {
+                            DrawCircleLines(static_cast<int>(sx), static_cast<int>(sy), r + 3.0f, ::Color{255, 230, 80, 255});
+                            DrawCircleLines(static_cast<int>(sx), static_cast<int>(sy), r + 4.0f, ::Color{255, 230, 80, 255});
+                        }
                         if (state.nail_numbers_visible) {
                             char buf[16];
                             std::snprintf(buf, sizeof(buf), "%d", i);
                             DrawText(buf, static_cast<int>(sx) + 8, static_cast<int>(sy) - 8, 12, ::Color{220, 220, 220, 255});
                         }
+                    }
+
+                    // Rubber-band rectangle (Select mode in progress).
+                    if (state.rubber_band_active) {
+                        const Vector2 cur = GetMousePosition();
+                        const float x0 = std::min(state.rubber_band_start_screen.x, cur.x);
+                        const float y0 = std::min(state.rubber_band_start_screen.y, cur.y);
+                        const float w  = std::abs(cur.x - state.rubber_band_start_screen.x);
+                        const float h  = std::abs(cur.y - state.rubber_band_start_screen.y);
+                        DrawRectangle(static_cast<int>(x0), static_cast<int>(y0),
+                                      static_cast<int>(w),  static_cast<int>(h),
+                                      ::Color{200, 220, 255, 35});
+                        DrawRectangleLinesEx({x0, y0, w, h}, 1.0f, ::Color{200, 220, 255, 220});
                     }
                 }
             }
