@@ -28,6 +28,9 @@ inline void apply_transform(GeometryBuffer& geo, LayerTransform t) {
     for (auto& p : geo.polylines) {
         for (auto& v : p) v = apply(t, v);
     }
+    for (auto& pt : geo.points) {
+        pt = apply(t, pt);
+    }
 }
 
 // Build the renderable layer list from a Scene. Hidden layers are skipped.

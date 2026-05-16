@@ -1,9 +1,13 @@
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <numbers>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -26,6 +30,11 @@
 #include <raylib.h>
 #include <rlImGui.h>
 #include <tinyfiledialogs.h>
+
+// msf_gif is a single-header GIF encoder. Define MSF_GIF_IMPL in exactly
+// one translation unit (this one) and include normally everywhere else.
+#define MSF_GIF_IMPL
+#include <msf_gif.h>
 
 namespace fs = std::filesystem;
 
@@ -138,6 +147,7 @@ struct AppState {
 
     caustic::anim::AnimationSpec animation;
     char bake_name_buf[64] = "animation";
+    bool encode_mp4_after_png = true;  // try `ffmpeg` after a PNG bake
 
     char save_name_buf[64] = "untitled";
     char export_name_buf[64] = "export";
@@ -164,6 +174,13 @@ struct AppState {
     std::vector<int> selected_chords;
     bool rubber_band_active = false;
     Vector2 rubber_band_start_screen{0.0f, 0.0f};
+
+    // LinearEnvelope canvas-drag editor — when the current layer is
+    // LinearEnvelope, left-click on one of the 4 endpoints (a_start, a_end,
+    // b_start, b_end) and drag to move it. Index 0..3 maps to that order.
+    int lenv_dragging_idx = -1;
+    std::vector<caustic::LinearEnvelopeParams> lenv_undo_stack;
+    std::vector<caustic::LinearEnvelopeParams> lenv_redo_stack;
     bool nail_grid_visible = false;  // draw a faint grid overlay in edit view
     bool nail_grid_snap = false;     // snap newly-placed nails to grid intersections
     double nail_grid_spacing = 0.1;  // world-units between grid lines
@@ -375,8 +392,8 @@ void render_param_panel(AppState& state) {
             break;
         case caustic::GeneratorType::LinearEnvelope: {
             // Line endpoints exposed as SliderFloat2 pairs so each line is one
-            // widget. A future polish would let you drag the endpoints on the
-            // canvas itself; for now keyboard-friendly sliders.
+            // widget. The same endpoints are also draggable directly on the
+            // canvas — see overlay below.
             auto edit_endpoint = [&](const char* label, caustic::Vec2& v) {
                 float xy[2] = {static_cast<float>(v.x), static_cast<float>(v.y)};
                 if (ImGui::SliderFloat2(label, xy, -3.0f, 3.0f, "%.3f")) {
@@ -390,6 +407,40 @@ void render_param_panel(AppState& state) {
             edit_endpoint("b end",   p.generator.lenv.b_end);
             if (slider_int_w("N",    &p.generator.lenv.N, 2, 500)) state.dirty = true;
             if (slider_double_w("k", &p.generator.lenv.k, -100.0, 100.0, 0.1)) state.dirty = true;
+
+            ImGui::Separator();
+            // Undo/redo for the canvas-drag editor.
+            ImGui::BeginDisabled(state.lenv_undo_stack.empty());
+            if (ImGui::Button("Undo")) {
+                auto& lp = p.generator.lenv;
+                state.lenv_redo_stack.push_back(lp);
+                lp = std::move(state.lenv_undo_stack.back());
+                state.lenv_undo_stack.pop_back();
+                state.lenv_dragging_idx = -1;
+                state.dirty = true;
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::BeginDisabled(state.lenv_redo_stack.empty());
+            if (ImGui::Button("Redo")) {
+                auto& lp = p.generator.lenv;
+                state.lenv_undo_stack.push_back(lp);
+                lp = std::move(state.lenv_redo_stack.back());
+                state.lenv_redo_stack.pop_back();
+                state.lenv_dragging_idx = -1;
+                state.dirty = true;
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::TextDisabled("Ctrl+Z / Ctrl+Y");
+            ImGui::Checkbox("show grid", &state.nail_grid_visible);
+            ImGui::SameLine();
+            ImGui::Checkbox("snap to grid", &state.nail_grid_snap);
+            if (slider_double_w("grid spacing", &state.nail_grid_spacing,
+                                0.01, 1.0, 0.01, "%.3f")) {}
+            ImGui::TextDisabled("Drag the a0/a1/b0/b1 handles on the canvas to reposition endpoints.");
+            ImGui::TextDisabled("Drag a handle near another to snap them together (target ringed in yellow).");
+            ImGui::TextDisabled("(Same grid + snap state as the CustomChord editor.)");
             break;
         }
         case caustic::GeneratorType::Clifford: {
@@ -402,6 +453,12 @@ void render_param_panel(AppState& state) {
             if (slider_double_w("y0", &c.y0, -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
             if (slider_int_w("iterations", &c.iterations, 500, 200000)) state.dirty = true;
             if (slider_int_w("burn in",    &c.burn_in,    0,   10000))  state.dirty = true;
+            static const char* const kAttractorRenderNames[] = {"polyline", "scatter", "both"};
+            int rm = static_cast<int>(c.render_mode);
+            if (ImGui::Combo("render mode", &rm, kAttractorRenderNames, IM_ARRAYSIZE(kAttractorRenderNames))) {
+                c.render_mode = static_cast<caustic::AttractorRenderMode>(rm);
+                state.dirty = true;
+            }
             break;
         }
         case caustic::GeneratorType::DeJong: {
@@ -414,6 +471,12 @@ void render_param_panel(AppState& state) {
             if (slider_double_w("y0", &c.y0, -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
             if (slider_int_w("iterations", &c.iterations, 500, 200000)) state.dirty = true;
             if (slider_int_w("burn in",    &c.burn_in,    0,   10000))  state.dirty = true;
+            static const char* const kAttractorRenderNames[] = {"polyline", "scatter", "both"};
+            int rm = static_cast<int>(c.render_mode);
+            if (ImGui::Combo("render mode", &rm, kAttractorRenderNames, IM_ARRAYSIZE(kAttractorRenderNames))) {
+                c.render_mode = static_cast<caustic::AttractorRenderMode>(rm);
+                state.dirty = true;
+            }
             break;
         }
         case caustic::GeneratorType::Tinkerbell: {
@@ -426,6 +489,12 @@ void render_param_panel(AppState& state) {
             if (slider_double_w("y0", &c.y0, -2.0, 2.0, 0.001, "%.4f")) state.dirty = true;
             if (slider_int_w("iterations", &c.iterations, 500, 200000)) state.dirty = true;
             if (slider_int_w("burn in",    &c.burn_in,    0,   10000))  state.dirty = true;
+            static const char* const kAttractorRenderNames[] = {"polyline", "scatter", "both"};
+            int rm = static_cast<int>(c.render_mode);
+            if (ImGui::Combo("render mode", &rm, kAttractorRenderNames, IM_ARRAYSIZE(kAttractorRenderNames))) {
+                c.render_mode = static_cast<caustic::AttractorRenderMode>(rm);
+                state.dirty = true;
+            }
             ImGui::TextDisabled("Tinkerbell can diverge — orbit truncates if out of basin.");
             break;
         }
@@ -908,7 +977,7 @@ fs::path user_animation_dir() {
     return caustic::user_preset_dir().parent_path() / "animations";
 }
 
-void render_animation_panel(AppState& state) {
+void render_animation_panel(AppState& state, caustic::RaylibRenderer& renderer) {
     auto& anim = state.animation;
     ImGui::Begin("Animation");
 
@@ -954,12 +1023,13 @@ void render_animation_panel(AppState& state) {
 
     // Envelope type
     int env_idx = static_cast<int>(anim.envelope.index());
-    static const char* const kEnvNames[] = {"static", "linear", "sine"};
+    static const char* const kEnvNames[] = {"static", "linear", "sine", "keyframed"};
     if (ImGui::Combo("envelope", &env_idx, kEnvNames, IM_ARRAYSIZE(kEnvNames))) {
         switch (env_idx) {
-            case 0: anim.envelope = caustic::anim::Static{};  break;
-            case 1: anim.envelope = caustic::anim::Linear{};  break;
-            case 2: anim.envelope = caustic::anim::Sine{};    break;
+            case 0: anim.envelope = caustic::anim::Static{};    break;
+            case 1: anim.envelope = caustic::anim::Linear{};    break;
+            case 2: anim.envelope = caustic::anim::Sine{};      break;
+            case 3: anim.envelope = caustic::anim::Keyframed{}; break;
         }
         state.dirty = true;
     }
@@ -975,6 +1045,47 @@ void render_animation_panel(AppState& state) {
         if (slider_double_w("frequency", &w->frequency,    0.0,  10.0, 0.01)) state.dirty = true;
         if (slider_double_w("phase",     &w->phase,       -std::numbers::pi, std::numbers::pi, 0.01)) state.dirty = true;
         if (slider_double_w("offset",    &w->offset,    -100.0, 100.0, 0.01)) state.dirty = true;
+    } else if (auto* k = std::get_if<caustic::anim::Keyframed>(&anim.envelope)) {
+        // One row per keyframe: t slider + value slider + delete. After any
+        // edit, re-sort by t so the evaluator's bracket-find stays valid.
+        ImGui::TextDisabled("%d keyframes — interpolated linearly between adjacent points", static_cast<int>(k->keys.size()));
+        int delete_idx = -1;
+        bool edited = false;
+        for (int i = 0; i < static_cast<int>(k->keys.size()); ++i) {
+            ImGui::PushID(i);
+            ImGui::SetNextItemWidth(110);
+            if (slider_double_w("t",     &k->keys[i].first,  0.0, 1.0, 0.01, "%.3f")) { edited = true; state.dirty = true; }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(110);
+            if (slider_double_w("value", &k->keys[i].second, -100.0, 100.0, 0.01))     { edited = true; state.dirty = true; }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("x")) { delete_idx = i; }
+            ImGui::PopID();
+        }
+        if (delete_idx >= 0) {
+            k->keys.erase(k->keys.begin() + delete_idx);
+            state.dirty = true;
+        }
+        if (ImGui::Button("Add keyframe")) {
+            // Insert at the midpoint between the last two t values, or at
+            // (0.5, 0.0) if the list is empty.
+            double new_t = 0.5;
+            double new_v = 0.0;
+            if (k->keys.size() >= 2) {
+                new_t = (k->keys[k->keys.size() - 2].first + k->keys.back().first) * 0.5;
+                new_v = (k->keys[k->keys.size() - 2].second + k->keys.back().second) * 0.5;
+            } else if (k->keys.size() == 1) {
+                new_t = std::clamp(k->keys[0].first + 0.1, 0.0, 1.0);
+                new_v = k->keys[0].second;
+            }
+            k->keys.push_back({new_t, new_v});
+            edited = true;
+            state.dirty = true;
+        }
+        if (edited) {
+            std::sort(k->keys.begin(), k->keys.end(),
+                      [](const auto& a, const auto& b) { return a.first < b.first; });
+        }
     }
 
     ImGui::Separator();
@@ -1038,9 +1149,139 @@ void render_animation_panel(AppState& state) {
         do_bake(user_animation_dir());
     }
     ImGui::SameLine();
-    if (ImGui::Button("Bake to folder…")) {
+    if (ImGui::Button("Bake SVG to folder…")) {
         const fs::path chosen = pick_folder(user_animation_dir());
         if (!chosen.empty()) do_bake(chosen);
+    }
+
+    // PNG bake — render each frame via the raylib offscreen canvas (resized
+    // to state.export_size × state.export_size), write a numbered PNG per
+    // frame, optionally invoke ffmpeg to encode an mp4 from the sequence.
+    auto do_bake_png = [&](const fs::path& dir) {
+        try {
+            fs::create_directories(dir);
+            const int frames = std::max(2, anim.bake_frames);
+            const int orig_w = GetScreenWidth();
+            const int orig_h = GetScreenHeight();
+            const int sz = std::max(64, state.export_size);
+            renderer.resize(sz, sz);
+            for (int i = 0; i < frames; ++i) {
+                const double t = static_cast<double>(i) / static_cast<double>(frames - 1);
+                caustic::Preset frame = state.preset;
+                if (anim.target != caustic::anim::Target::None) {
+                    const double value = caustic::anim::evaluate(anim.envelope, t);
+                    caustic::anim::write_target(anim.target, value, frame, state.current_layer_idx);
+                }
+                renderer.redraw(caustic::build_renderables(frame.scene, /*coarse=*/false),
+                                frame.scene.background, frame.camera);
+                char buf[80];
+                std::snprintf(buf, sizeof(buf), "%s_%04d.png", state.bake_name_buf, i);
+                renderer.write_png((dir / buf).string().c_str());
+            }
+            renderer.resize(orig_w, orig_h);
+            state.dirty = true;  // re-render the live canvas next frame
+
+            std::string status = "baked " + std::to_string(frames) +
+                                 " PNG frames to " + dir.string();
+            if (state.encode_mp4_after_png) {
+                const double fps = std::max(1.0,
+                    static_cast<double>(frames) / std::max(0.001, anim.duration_sec));
+                const fs::path mp4 = dir / (std::string(state.bake_name_buf) + ".mp4");
+                const std::string pattern = (dir / (std::string(state.bake_name_buf) + "_%04d.png")).string();
+                std::ostringstream cmd;
+                cmd << "ffmpeg -y -framerate " << static_cast<int>(fps + 0.5)
+                    << " -i \"" << pattern << "\""
+                    << " -c:v libx264 -pix_fmt yuv420p \"" << mp4.string() << "\""
+                    << " >/dev/null 2>&1";
+                const int rc = std::system(cmd.str().c_str());
+                if (rc == 0) {
+                    status += "; encoded " + mp4.filename().string();
+                } else {
+                    status += "; ffmpeg encode failed (is `ffmpeg` on PATH?)";
+                }
+            }
+            state.status_message = status;
+        } catch (const std::exception& e) {
+            state.status_message = std::string("PNG bake failed: ") + e.what();
+        }
+    };
+
+    if (ImGui::Button("Bake PNG sequence")) {
+        do_bake_png(user_animation_dir());
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Bake PNG to folder…")) {
+        const fs::path chosen = pick_folder(user_animation_dir());
+        if (!chosen.empty()) do_bake_png(chosen);
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("encode mp4 after", &state.encode_mp4_after_png);
+
+    // GIF bake — single output file. Resizes the canvas, renders each frame
+    // to RGBA, feeds it to msf_gif, writes the result buffer to disk.
+    auto do_bake_gif = [&](const fs::path& path) {
+        try {
+            if (path.has_parent_path()) fs::create_directories(path.parent_path());
+            const int frames = std::max(2, anim.bake_frames);
+            const int orig_w = GetScreenWidth();
+            const int orig_h = GetScreenHeight();
+            const int sz = std::max(64, state.export_size);
+            renderer.resize(sz, sz);
+
+            MsfGifState gif{};
+            msf_gif_begin(&gif, sz, sz);
+            const int cs_per_frame = std::max(1,
+                static_cast<int>(anim.duration_sec * 100.0 /
+                                  static_cast<double>(frames) + 0.5));
+
+            for (int i = 0; i < frames; ++i) {
+                const double t = static_cast<double>(i) / static_cast<double>(frames - 1);
+                caustic::Preset frame = state.preset;
+                if (anim.target != caustic::anim::Target::None) {
+                    const double value = caustic::anim::evaluate(anim.envelope, t);
+                    caustic::anim::write_target(anim.target, value, frame, state.current_layer_idx);
+                }
+                renderer.redraw(caustic::build_renderables(frame.scene, /*coarse=*/false),
+                                frame.scene.background, frame.camera);
+                unsigned char* rgba = nullptr;
+                int w = 0, h = 0;
+                if (renderer.read_rgba_frame(&rgba, &w, &h)) {
+                    msf_gif_frame(&gif, rgba, cs_per_frame, /*maxBitDepth=*/16,
+                                  /*pitchInBytes=*/w * 4);
+                    std::free(rgba);
+                }
+            }
+
+            MsfGifResult result = msf_gif_end(&gif);
+            if (result.data) {
+                std::ofstream out(path, std::ios::binary);
+                out.write(static_cast<const char*>(result.data),
+                          static_cast<std::streamsize>(result.dataSize));
+            }
+            msf_gif_free(result);
+
+            renderer.resize(orig_w, orig_h);
+            state.dirty = true;
+
+            state.status_message = "baked " + std::to_string(frames) +
+                                   " GIF frames to " + path.string();
+        } catch (const std::exception& e) {
+            state.status_message = std::string("GIF bake failed: ") + e.what();
+        }
+    };
+
+    if (ImGui::Button("Bake animated GIF")) {
+        const fs::path path = user_animation_dir() /
+                              (std::string(state.bake_name_buf) + ".gif");
+        do_bake_gif(path);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Bake GIF as…")) {
+        const fs::path chosen = pick_save_file(
+            user_animation_dir(),
+            std::string(state.bake_name_buf) + ".gif",
+            "Animated GIF (*.gif)", "*.gif");
+        if (!chosen.empty()) do_bake_gif(chosen);
     }
 
     if (!state.status_message.empty()) {
@@ -1211,12 +1452,15 @@ int main() {
 
         if (!io.WantCaptureMouse) {
             // Pan: always available on middle-click; also on left-click when
-            // the current layer is *not* in nail-edit mode (otherwise left-
-            // click is reserved for placing / connecting nails).
+            // the current layer is *not* in an interactive editing context
+            // (CustomChord nail editor with a non-Off mode, OR an active
+            // LinearEnvelope endpoint drag).
             const bool nail_editing =
                 state.current_layer().generator.type == caustic::GeneratorType::CustomChord &&
                 state.nail_edit_mode != NailEditMode::Off;
-            const bool pan_left = !nail_editing && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+            const bool lenv_editing =
+                state.current_layer().generator.type == caustic::GeneratorType::LinearEnvelope;
+            const bool pan_left = !nail_editing && !lenv_editing && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
             if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE) || pan_left) {
                 const Vector2 d = GetMouseDelta();
                 if (d.x != 0.0f || d.y != 0.0f) {
@@ -1489,6 +1733,81 @@ int main() {
                     state.nail_dragging_idx = -1;
                 }
             }
+
+            // LinearEnvelope canvas-drag editor — drag any of the 4 endpoints
+            // by clicking + holding on its handle. Honours snap-to-grid (same
+            // state as the CustomChord editor).
+            if (edit_layer.generator.type == caustic::GeneratorType::LinearEnvelope) {
+                const Vector2 m = GetMousePosition();
+                const double cx = GetScreenWidth() / 2.0;
+                const double cy = GetScreenHeight() / 2.0;
+                const double scale = renderer.last_fit_scale() * state.preset.camera.zoom;
+                if (scale > 1e-9) {
+                    double world_x = (m.x - cx - state.preset.camera.pan_x_px) / scale;
+                    double world_y = -((m.y - cy - state.preset.camera.pan_y_px) / scale);
+                    auto& lenv = edit_layer.generator.lenv;
+                    caustic::Vec2* endpoints[4] = {
+                        &lenv.a_start, &lenv.a_end, &lenv.b_start, &lenv.b_end
+                    };
+                    auto maybe_snap = [&](double& x, double& y) {
+                        if (state.nail_grid_snap && state.nail_grid_spacing > 1e-6) {
+                            x = std::round(x / state.nail_grid_spacing) * state.nail_grid_spacing;
+                            y = std::round(y / state.nail_grid_spacing) * state.nail_grid_spacing;
+                        }
+                    };
+
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                        const double hit_radius_world = 14.0 / scale;
+                        int best = -1;
+                        double best_d2 = hit_radius_world * hit_radius_world;
+                        for (int i = 0; i < 4; ++i) {
+                            const double dx = endpoints[i]->x - world_x;
+                            const double dy = endpoints[i]->y - world_y;
+                            const double d2 = dx * dx + dy * dy;
+                            if (d2 < best_d2) { best_d2 = d2; best = i; }
+                        }
+                        if (best >= 0) {
+                            state.lenv_undo_stack.push_back(lenv);
+                            if (state.lenv_undo_stack.size() > 50)
+                                state.lenv_undo_stack.erase(state.lenv_undo_stack.begin());
+                            state.lenv_redo_stack.clear();
+                            state.lenv_dragging_idx = best;
+                        }
+                    }
+
+                    if (state.lenv_dragging_idx >= 0 &&
+                        state.lenv_dragging_idx < 4 &&
+                        IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+                        maybe_snap(world_x, world_y);
+                        // Handle-to-handle snap — when the dragged endpoint
+                        // comes within hit-radius of any *other* endpoint,
+                        // snap to that endpoint's exact position. Lets the
+                        // user rejoin a split corner (e.g. corner_fan's
+                        // a_start / b_start) without pixel-hunting.
+                        const double snap_r2 = (14.0 / scale) * (14.0 / scale);
+                        for (int j = 0; j < 4; ++j) {
+                            if (j == state.lenv_dragging_idx) continue;
+                            const double dx = endpoints[j]->x - world_x;
+                            const double dy = endpoints[j]->y - world_y;
+                            if (dx * dx + dy * dy < snap_r2) {
+                                world_x = endpoints[j]->x;
+                                world_y = endpoints[j]->y;
+                                break;
+                            }
+                        }
+                        caustic::Vec2& target = *endpoints[state.lenv_dragging_idx];
+                        if (target.x != world_x || target.y != world_y) {
+                            target.x = world_x;
+                            target.y = world_y;
+                            state.dirty = true;
+                        }
+                    }
+                }
+
+                if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+                    state.lenv_dragging_idx = -1;
+                }
+            }
         }
 
         if (!io.WantCaptureKeyboard) {
@@ -1549,6 +1868,23 @@ int main() {
                     state.dirty = true;
                 }
             }
+            if (ctrl && state.current_layer().generator.type == caustic::GeneratorType::LinearEnvelope) {
+                auto& lp = state.current_layer().generator.lenv;
+                if (IsKeyPressed(KEY_Z) && !shift && !state.lenv_undo_stack.empty()) {
+                    state.lenv_redo_stack.push_back(lp);
+                    lp = std::move(state.lenv_undo_stack.back());
+                    state.lenv_undo_stack.pop_back();
+                    state.lenv_dragging_idx = -1;
+                    state.dirty = true;
+                } else if ((IsKeyPressed(KEY_Y) || (IsKeyPressed(KEY_Z) && shift)) &&
+                           !state.lenv_redo_stack.empty()) {
+                    state.lenv_undo_stack.push_back(lp);
+                    lp = std::move(state.lenv_redo_stack.back());
+                    state.lenv_redo_stack.pop_back();
+                    state.lenv_dragging_idx = -1;
+                    state.dirty = true;
+                }
+            }
         }
 
         // Clear undo/redo when the active layer or its generator type changes —
@@ -1561,6 +1897,9 @@ int main() {
                 cur_type != state.nail_history_last_generator_type) {
                 state.nail_undo_stack.clear();
                 state.nail_redo_stack.clear();
+                state.lenv_undo_stack.clear();
+                state.lenv_redo_stack.clear();
+                state.lenv_dragging_idx = -1;
                 state.selected_nails.clear();
                 state.selected_chords.clear();
                 state.rubber_band_active = false;
@@ -1734,13 +2073,99 @@ int main() {
                     }
                 }
             }
+
+            // LinearEnvelope overlay: faint grid (if requested) + the two
+            // segments + 4 draggable endpoint handles. Drawn after the canvas
+            // blit so handles sit on top of the chord geometry.
+            if (edit_layer_for_overlay.generator.type == caustic::GeneratorType::LinearEnvelope) {
+                const double cx = GetScreenWidth() / 2.0;
+                const double cy = GetScreenHeight() / 2.0;
+                const double scale = renderer.last_fit_scale() * state.preset.camera.zoom;
+                if (scale > 1e-9) {
+                    if (state.nail_grid_visible && state.nail_grid_spacing > 1e-6) {
+                        const double spacing = state.nail_grid_spacing;
+                        const double world_x_min = (0.0 - cx - state.preset.camera.pan_x_px) / scale;
+                        const double world_x_max = (GetScreenWidth() - cx - state.preset.camera.pan_x_px) / scale;
+                        const double world_y_min = -((GetScreenHeight() - cy - state.preset.camera.pan_y_px) / scale);
+                        const double world_y_max = -((0.0 - cy - state.preset.camera.pan_y_px) / scale);
+                        if ((world_x_max - world_x_min) / spacing < 400.0 &&
+                            (world_y_max - world_y_min) / spacing < 400.0) {
+                            const ::Color grid_col{80, 110, 130, 90};
+                            const int ix_start = static_cast<int>(std::floor(world_x_min / spacing));
+                            const int ix_end   = static_cast<int>(std::ceil(world_x_max / spacing));
+                            for (int ix = ix_start; ix <= ix_end; ++ix) {
+                                const float sx = static_cast<float>(cx + state.preset.camera.pan_x_px + ix * spacing * scale);
+                                DrawLine(static_cast<int>(sx), 0,
+                                         static_cast<int>(sx), GetScreenHeight(), grid_col);
+                            }
+                            const int iy_start = static_cast<int>(std::floor(world_y_min / spacing));
+                            const int iy_end   = static_cast<int>(std::ceil(world_y_max / spacing));
+                            for (int iy = iy_start; iy <= iy_end; ++iy) {
+                                const float sy = static_cast<float>(cy + state.preset.camera.pan_y_px - iy * spacing * scale);
+                                DrawLine(0, static_cast<int>(sy),
+                                         GetScreenWidth(), static_cast<int>(sy), grid_col);
+                            }
+                        }
+                    }
+
+                    const auto& lenv = edit_layer_for_overlay.generator.lenv;
+                    auto to_scr = [&](caustic::Vec2 v) -> Vector2 {
+                        return {
+                            static_cast<float>(cx + state.preset.camera.pan_x_px + v.x * scale),
+                            static_cast<float>(cy + state.preset.camera.pan_y_px - v.y * scale)
+                        };
+                    };
+                    const Vector2 a0 = to_scr(lenv.a_start);
+                    const Vector2 a1 = to_scr(lenv.a_end);
+                    const Vector2 b0 = to_scr(lenv.b_start);
+                    const Vector2 b1 = to_scr(lenv.b_end);
+                    const ::Color seg_a_col{ 90, 170, 240, 200};
+                    const ::Color seg_b_col{240, 170,  90, 200};
+
+                    DrawLineEx(a0, a1, 1.5f, seg_a_col);
+                    DrawLineEx(b0, b1, 1.5f, seg_b_col);
+
+                    const Vector2 pts[4] = {a0, a1, b0, b1};
+                    const ::Color cols[4] = {seg_a_col, seg_a_col, seg_b_col, seg_b_col};
+                    const char* labels[4] = {"a0", "a1", "b0", "b1"};
+
+                    // Identify a snap target while dragging — the nearest
+                    // *other* handle within hit radius — so the user can see
+                    // which handle the active drag will snap onto.
+                    int snap_to = -1;
+                    if (state.lenv_dragging_idx >= 0 && state.lenv_dragging_idx < 4) {
+                        const caustic::Vec2 src_w[4] = {lenv.a_start, lenv.a_end, lenv.b_start, lenv.b_end};
+                        const caustic::Vec2 d = src_w[state.lenv_dragging_idx];
+                        const double snap_r2 = (14.0 / scale) * (14.0 / scale);
+                        for (int j = 0; j < 4; ++j) {
+                            if (j == state.lenv_dragging_idx) continue;
+                            const double dx = src_w[j].x - d.x;
+                            const double dy = src_w[j].y - d.y;
+                            if (dx * dx + dy * dy < snap_r2) { snap_to = j; break; }
+                        }
+                    }
+
+                    for (int i = 0; i < 4; ++i) {
+                        const bool dragging  = (i == state.lenv_dragging_idx);
+                        const bool snap_tgt  = (i == snap_to);
+                        const float r = dragging ? 7.5f : 5.5f;
+                        DrawCircle(static_cast<int>(pts[i].x), static_cast<int>(pts[i].y), r, cols[i]);
+                        DrawCircleLines(static_cast<int>(pts[i].x), static_cast<int>(pts[i].y), r, ::Color{20, 20, 20, 255});
+                        if (snap_tgt) {
+                            DrawCircleLines(static_cast<int>(pts[i].x), static_cast<int>(pts[i].y), r + 3.0f, ::Color{255, 230, 80, 255});
+                            DrawCircleLines(static_cast<int>(pts[i].x), static_cast<int>(pts[i].y), r + 4.0f, ::Color{255, 230, 80, 255});
+                        }
+                        DrawText(labels[i], static_cast<int>(pts[i].x) + 8, static_cast<int>(pts[i].y) - 8, 11, ::Color{220, 220, 220, 255});
+                    }
+                }
+            }
         }
 
         rlImGuiBegin();
         render_param_panel(state);
         render_style_panel(state);
         render_layers_panel(state);
-        render_animation_panel(state);
+        render_animation_panel(state, renderer);
         render_preset_panel(state);
         const bool active_now = ImGui::IsAnyItemActive();
         rlImGuiEnd();

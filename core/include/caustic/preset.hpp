@@ -101,6 +101,17 @@ struct LinearEnvelopeParams {
     double k = 1.0;
 };
 
+// Strange-attractor render-mode selector. Polyline = connect consecutive
+// iterates with line segments (the original behaviour). Scatter = emit each
+// iterate as a single point — the canonical scatter-plot attractor look,
+// which reads as orbital density without the stroke texture from
+// connect-consecutive-iterates. Both = emit polylines AND points.
+enum class AttractorRenderMode {
+    Polyline,
+    Scatter,
+    Both,
+};
+
 // Strange-attractor parameter blocks. Each holds the four map coefficients
 // (a, b, c, d), the initial orbit point (x0, y0), and the
 // burn_in / iterations counts. Defaults are tuned per attractor to land on
@@ -115,6 +126,7 @@ struct CliffordParams {
     double y0 = 0.1;
     int iterations = 30000;
     int burn_in = 100;
+    AttractorRenderMode render_mode = AttractorRenderMode::Polyline;
 };
 
 struct DeJongParams {
@@ -126,6 +138,7 @@ struct DeJongParams {
     double y0 = 0.1;
     int iterations = 30000;
     int burn_in = 100;
+    AttractorRenderMode render_mode = AttractorRenderMode::Polyline;
 };
 
 struct TinkerbellParams {
@@ -137,6 +150,7 @@ struct TinkerbellParams {
     double y0 = -0.64;
     int iterations = 10000;  // Tinkerbell escapes its basin readily; smaller default keeps it stable
     int burn_in = 100;
+    AttractorRenderMode render_mode = AttractorRenderMode::Polyline;
 };
 
 // Which set of parabolic fans the diamond_stack generator emits per module.

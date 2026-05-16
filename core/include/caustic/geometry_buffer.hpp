@@ -11,6 +11,12 @@ namespace caustic {
 struct GeometryBuffer {
     std::vector<std::vector<Vec2>> polylines;
     ChordSet chords;
+    // Scatter geometry — one dot per entry. Used by the strange-attractor
+    // generators in Scatter render mode so each iterate draws as a discrete
+    // point instead of being connected by a polyline. Renderers iterate the
+    // list and emit a small filled circle per point, coloured by the layer
+    // style's color_map sampled at i / (N-1).
+    std::vector<Vec2> points;
     // Optional per-chord colour override. Empty by default. When non-empty
     // AND its size matches chords.size(), each entry replaces the colour-map
     // sample for that chord. The custom_chord generator uses this so the

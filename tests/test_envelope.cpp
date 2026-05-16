@@ -35,6 +35,46 @@ TEST_CASE("Sine envelope returns offset at phase=0, t=0") {
     CHECK(std::abs(evaluate(e, 0.5) - 0.5) < 1e-9);
 }
 
+TEST_CASE("Keyframed envelope returns exact value at key times") {
+    Envelope e = Keyframed{{{0.0, 2.0}, {0.5, 5.0}, {1.0, -1.0}}};
+    CHECK(std::abs(evaluate(e, 0.0) - 2.0) < kEps);
+    CHECK(std::abs(evaluate(e, 0.5) - 5.0) < kEps);
+    CHECK(std::abs(evaluate(e, 1.0) - (-1.0)) < kEps);
+}
+
+TEST_CASE("Keyframed envelope lerps between adjacent keys") {
+    Envelope e = Keyframed{{{0.0, 0.0}, {1.0, 10.0}}};
+    CHECK(std::abs(evaluate(e, 0.25) - 2.5) < kEps);
+    CHECK(std::abs(evaluate(e, 0.75) - 7.5) < kEps);
+}
+
+TEST_CASE("Keyframed envelope clamps out-of-range t to edge keys") {
+    Envelope e = Keyframed{{{0.2, 1.0}, {0.8, 4.0}}};
+    CHECK(std::abs(evaluate(e, 0.0) - 1.0) < kEps);   // below first key
+    CHECK(std::abs(evaluate(e, 0.2) - 1.0) < kEps);   // at first key
+    CHECK(std::abs(evaluate(e, 0.8) - 4.0) < kEps);   // at last key
+    CHECK(std::abs(evaluate(e, 1.0) - 4.0) < kEps);   // above last key
+}
+
+TEST_CASE("Keyframed envelope with one key returns that value for any t") {
+    Envelope e = Keyframed{{{0.3, 7.5}}};
+    CHECK(std::abs(evaluate(e, 0.0) - 7.5) < kEps);
+    CHECK(std::abs(evaluate(e, 0.5) - 7.5) < kEps);
+    CHECK(std::abs(evaluate(e, 1.0) - 7.5) < kEps);
+}
+
+TEST_CASE("Keyframed envelope with zero keys returns 0") {
+    Envelope e = Keyframed{{}};
+    CHECK(evaluate(e, 0.0) == 0.0);
+    CHECK(evaluate(e, 0.5) == 0.0);
+}
+
+TEST_CASE("Keyframed envelope handles non-monotonic values (V-shape)") {
+    Envelope e = Keyframed{{{0.0, 1.0}, {0.5, 0.0}, {1.0, 1.0}}};
+    CHECK(std::abs(evaluate(e, 0.25) - 0.5) < kEps);
+    CHECK(std::abs(evaluate(e, 0.75) - 0.5) < kEps);
+}
+
 TEST_CASE("write_target dispatches Modular chord k") {
     caustic::Preset p;
     p.scene.layers[0].generator.type = caustic::GeneratorType::ModularChord;

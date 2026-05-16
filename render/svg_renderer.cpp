@@ -54,6 +54,7 @@ Bounds compute_bounds(const std::vector<LayerRender>& layers) {
     for (const auto& layer : layers) {
         for (const auto& c : layer.geometry.chords) { include(c.a); include(c.b); }
         for (const auto& p : layer.geometry.polylines) for (auto v : p) include(v);
+        for (const auto& pt : layer.geometry.points) include(pt);
     }
     if (b.empty) { b.xmin = b.ymin = -1.0; b.xmax = b.ymax = 1.0; b.empty = false; }
     return b;
@@ -239,6 +240,36 @@ void render_layer(std::ostringstream& out, std::size_t idx, const LayerRender& L
             const double w = lerp_width(style.stroke.width_min, style.stroke.width_max, tw);
             const double op = col.a * style.stroke.opacity;
             emit_line(out, to_svg(m, a), to_svg(m, b), color_to_hex(col), w, op, with_opacity);
+        }
+    }
+
+    // Points (scatter) — used by attractor generators in Scatter / Both
+    // render modes. Each entry emits a single <circle>; radius derives from
+    // stroke.width_min with a small floor so sub-pixel widths still render.
+    if (!geo.points.empty()) {
+        const std::size_t N = geo.points.size();
+        const double radius = std::max(0.3, style.stroke.width_min * 0.5);
+        for (std::size_t i = 0; i < N; ++i) {
+            const Vec2 sv = to_svg(m, geo.points[i]);
+            Color col;
+            if (opts.plotter_mode) {
+                col = Color{};
+            } else {
+                const double t  = (N > 1) ? static_cast<double>(i) /
+                                            static_cast<double>(N - 1) : 0.0;
+                const double tc = remap_cyclic(t, style.cyclic);
+                col = style.color_map->at(tc);
+            }
+            const std::string hex = opts.plotter_mode ? opts.plotter_color : color_to_hex(col);
+            const double op = col.a * style.stroke.opacity;
+            out << "    <circle cx=\"" << fmt_f(sv.x)
+                << "\" cy=\"" << fmt_f(sv.y)
+                << "\" r=\""  << fmt_f(radius)
+                << "\" fill=\"" << hex << "\"";
+            if (with_opacity) {
+                out << " fill-opacity=\"" << fmt_f(op) << "\"";
+            }
+            out << "/>\n";
         }
     }
 

@@ -91,6 +91,22 @@ inline GeneratorType generator_type_from_string(const std::string& s) {
     throw std::runtime_error("unknown generator type: " + s);
 }
 
+inline std::string attractor_render_mode_to_string(AttractorRenderMode m) {
+    switch (m) {
+        case AttractorRenderMode::Polyline: return "polyline";
+        case AttractorRenderMode::Scatter:  return "scatter";
+        case AttractorRenderMode::Both:     return "both";
+    }
+    return "polyline";
+}
+
+inline AttractorRenderMode attractor_render_mode_from_string(const std::string& s) {
+    if (s == "polyline") return AttractorRenderMode::Polyline;
+    if (s == "scatter")  return AttractorRenderMode::Scatter;
+    if (s == "both")     return AttractorRenderMode::Both;
+    throw std::runtime_error("unknown attractor render_mode: " + s);
+}
+
 inline std::string diamond_stack_fans_to_string(DiamondStackFans f) {
     switch (f) {
         case DiamondStackFans::Both:       return "both";
@@ -194,6 +210,7 @@ inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
             gp["x0"] = gs.clif.x0; gp["y0"] = gs.clif.y0;
             gp["iterations"] = gs.clif.iterations;
             gp["burn_in"]    = gs.clif.burn_in;
+            gp["render_mode"] = attractor_render_mode_to_string(gs.clif.render_mode);
             break;
         case GeneratorType::DeJong:
             gp["a"] = gs.dejo.a; gp["b"] = gs.dejo.b;
@@ -201,6 +218,7 @@ inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
             gp["x0"] = gs.dejo.x0; gp["y0"] = gs.dejo.y0;
             gp["iterations"] = gs.dejo.iterations;
             gp["burn_in"]    = gs.dejo.burn_in;
+            gp["render_mode"] = attractor_render_mode_to_string(gs.dejo.render_mode);
             break;
         case GeneratorType::Tinkerbell:
             gp["a"] = gs.tink.a; gp["b"] = gs.tink.b;
@@ -208,6 +226,7 @@ inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
             gp["x0"] = gs.tink.x0; gp["y0"] = gs.tink.y0;
             gp["iterations"] = gs.tink.iterations;
             gp["burn_in"]    = gs.tink.burn_in;
+            gp["render_mode"] = attractor_render_mode_to_string(gs.tink.render_mode);
             break;
         case GeneratorType::DiamondStack:
             gp["n_modules"]    = gs.dstack.n_modules;
@@ -319,6 +338,10 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
             gs.clif.y0 = gp.value("y0", gs.clif.y0);
             gs.clif.iterations = gp.value("iterations", gs.clif.iterations);
             gs.clif.burn_in    = gp.value("burn_in",    gs.clif.burn_in);
+            if (gp.contains("render_mode")) {
+                gs.clif.render_mode = attractor_render_mode_from_string(
+                    gp.at("render_mode").get<std::string>());
+            }
             break;
         case GeneratorType::DeJong:
             gs.dejo.a  = gp.value("a",  gs.dejo.a);
@@ -329,6 +352,10 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
             gs.dejo.y0 = gp.value("y0", gs.dejo.y0);
             gs.dejo.iterations = gp.value("iterations", gs.dejo.iterations);
             gs.dejo.burn_in    = gp.value("burn_in",    gs.dejo.burn_in);
+            if (gp.contains("render_mode")) {
+                gs.dejo.render_mode = attractor_render_mode_from_string(
+                    gp.at("render_mode").get<std::string>());
+            }
             break;
         case GeneratorType::Tinkerbell:
             gs.tink.a  = gp.value("a",  gs.tink.a);
@@ -339,6 +366,10 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
             gs.tink.y0 = gp.value("y0", gs.tink.y0);
             gs.tink.iterations = gp.value("iterations", gs.tink.iterations);
             gs.tink.burn_in    = gp.value("burn_in",    gs.tink.burn_in);
+            if (gp.contains("render_mode")) {
+                gs.tink.render_mode = attractor_render_mode_from_string(
+                    gp.at("render_mode").get<std::string>());
+            }
             break;
         case GeneratorType::DiamondStack:
             gs.dstack.n_modules    = gp.value("n_modules",    gs.dstack.n_modules);

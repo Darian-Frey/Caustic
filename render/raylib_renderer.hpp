@@ -31,6 +31,16 @@ public:
 
     void blit_to_screen() const;
 
+    // Write the offscreen canvas as a PNG to the given path. Used by the
+    // PNG-sequence bake. Returns true on success.
+    bool write_png(const char* path) const;
+
+    // Copy the offscreen canvas into an RGBA buffer (top-to-bottom row order,
+    // 4 bytes per pixel). Buffer is allocated by the callee. Caller frees
+    // via std::free. Used by the GIF encoder. Returns true on success and
+    // writes the width / height through the out parameters.
+    bool read_rgba_frame(unsigned char** out_pixels, int* out_w, int* out_h) const;
+
     // Most recent geometry fit-scale (world units → screen pixels, before
     // applying camera.zoom). Used by interactive overlays (e.g. the
     // custom-chord nail editor) to convert mouse-screen-coords back to

@@ -3,6 +3,8 @@
 #include <cmath>
 
 #include <caustic/generators/attractors.hpp>
+#include <caustic/geometry_factory.hpp>
+#include <caustic/preset.hpp>
 
 using namespace caustic;
 
@@ -83,4 +85,36 @@ TEST_CASE("Divergent step (× 10 each iter) trips the sentinel") {
         [](double x, double y, double& nx, double& ny) { nx = x * 10.0; ny = y * 10.0; });
     CHECK(orbit.diverged);
     CHECK(orbit.points.size() < 100);
+}
+
+TEST_CASE("AttractorRenderMode::Polyline (default) → polylines, no points") {
+    caustic::GeneratorSpec g;
+    g.type = caustic::GeneratorType::Clifford;
+    g.clif.iterations = 500;
+    g.clif.render_mode = caustic::AttractorRenderMode::Polyline;
+    const auto geo = caustic::geometry_from_spec(g);
+    CHECK(geo.polylines.size() == 1);
+    CHECK(geo.polylines[0].size() == 500);
+    CHECK(geo.points.empty());
+}
+
+TEST_CASE("AttractorRenderMode::Scatter → points, no polylines") {
+    caustic::GeneratorSpec g;
+    g.type = caustic::GeneratorType::DeJong;
+    g.dejo.iterations = 500;
+    g.dejo.render_mode = caustic::AttractorRenderMode::Scatter;
+    const auto geo = caustic::geometry_from_spec(g);
+    CHECK(geo.points.size() == 500);
+    CHECK(geo.polylines.empty());
+}
+
+TEST_CASE("AttractorRenderMode::Both → polylines AND points") {
+    caustic::GeneratorSpec g;
+    g.type = caustic::GeneratorType::Tinkerbell;
+    g.tink.iterations = 500;
+    g.tink.render_mode = caustic::AttractorRenderMode::Both;
+    const auto geo = caustic::geometry_from_spec(g);
+    CHECK(geo.polylines.size() == 1);
+    CHECK(geo.polylines[0].size() == 500);
+    CHECK(geo.points.size() == 500);
 }

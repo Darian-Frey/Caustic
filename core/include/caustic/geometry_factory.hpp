@@ -82,21 +82,48 @@ inline GeometryBuffer geometry_from_spec(const GeneratorSpec& g, bool coarse = f
             const int iters = coarse ? std::max(500, g.clif.iterations / 4) : g.clif.iterations;
             auto orbit = clifford_orbit(g.clif.a, g.clif.b, g.clif.c, g.clif.d,
                                         g.clif.x0, g.clif.y0, g.clif.burn_in, iters);
-            if (!orbit.points.empty()) geo.polylines.push_back(std::move(orbit.points));
+            if (!orbit.points.empty()) {
+                if (g.clif.render_mode == AttractorRenderMode::Polyline ||
+                    g.clif.render_mode == AttractorRenderMode::Both) {
+                    geo.polylines.push_back(orbit.points);
+                }
+                if (g.clif.render_mode == AttractorRenderMode::Scatter ||
+                    g.clif.render_mode == AttractorRenderMode::Both) {
+                    geo.points = std::move(orbit.points);
+                }
+            }
             break;
         }
         case GeneratorType::DeJong: {
             const int iters = coarse ? std::max(500, g.dejo.iterations / 4) : g.dejo.iterations;
             auto orbit = de_jong_orbit(g.dejo.a, g.dejo.b, g.dejo.c, g.dejo.d,
                                        g.dejo.x0, g.dejo.y0, g.dejo.burn_in, iters);
-            if (!orbit.points.empty()) geo.polylines.push_back(std::move(orbit.points));
+            if (!orbit.points.empty()) {
+                if (g.dejo.render_mode == AttractorRenderMode::Polyline ||
+                    g.dejo.render_mode == AttractorRenderMode::Both) {
+                    geo.polylines.push_back(orbit.points);
+                }
+                if (g.dejo.render_mode == AttractorRenderMode::Scatter ||
+                    g.dejo.render_mode == AttractorRenderMode::Both) {
+                    geo.points = std::move(orbit.points);
+                }
+            }
             break;
         }
         case GeneratorType::Tinkerbell: {
             const int iters = coarse ? std::max(500, g.tink.iterations / 4) : g.tink.iterations;
             auto orbit = tinkerbell_orbit(g.tink.a, g.tink.b, g.tink.c, g.tink.d,
                                           g.tink.x0, g.tink.y0, g.tink.burn_in, iters);
-            if (!orbit.points.empty()) geo.polylines.push_back(std::move(orbit.points));
+            if (!orbit.points.empty()) {
+                if (g.tink.render_mode == AttractorRenderMode::Polyline ||
+                    g.tink.render_mode == AttractorRenderMode::Both) {
+                    geo.polylines.push_back(orbit.points);
+                }
+                if (g.tink.render_mode == AttractorRenderMode::Scatter ||
+                    g.tink.render_mode == AttractorRenderMode::Both) {
+                    geo.points = std::move(orbit.points);
+                }
+            }
             break;
         }
         case GeneratorType::DiamondStack: {

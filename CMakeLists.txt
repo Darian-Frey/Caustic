@@ -96,6 +96,21 @@ if(CAUSTIC_BUILD_APP)
         ${tinyfiledialogs_SOURCE_DIR}/tinyfiledialogs.c
     )
     target_include_directories(tinyfiledialogs PUBLIC ${tinyfiledialogs_SOURCE_DIR})
+
+    # msf_gif — single-header public-domain animated-GIF encoder. Used by
+    # the Animation panel's "Bake GIF" action so the app can produce demo
+    # loops without an external ffmpeg dependency. App-only.
+    FetchContent_Declare(
+        msf_gif
+        GIT_REPOSITORY https://github.com/notnullnotvoid/msf_gif.git
+        GIT_TAG v2.3
+    )
+    FetchContent_GetProperties(msf_gif)
+    if(NOT msf_gif_POPULATED)
+        FetchContent_Populate(msf_gif)
+    endif()
+    add_library(msf_gif INTERFACE)
+    target_include_directories(msf_gif INTERFACE ${msf_gif_SOURCE_DIR})
 endif()
 
 add_subdirectory(core)

@@ -16,7 +16,8 @@
             "x0": -0.72,
             "y0": -0.64,
             "iterations": 20000,
-            "burn_in": 100
+            "burn_in": 100,
+            "render_mode": "scatter"
           }
         },
         "style": {
@@ -29,10 +30,10 @@
           },
           "color_indexer": "by_curve_t",
           "stroke": {
-            "width_min": 0.2,
-            "width_max": 0.2,
+            "width_min": 1.8,
+            "width_max": 1.8,
             "width_indexer": "by_curve_t",
-            "opacity": 0.25
+            "opacity": 0.6
           },
           "cyclic": false
         },

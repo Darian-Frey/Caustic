@@ -12,4 +12,5 @@ target_link_libraries(caustic PRIVATE
     raylib
     imgui
     tinyfiledialogs
+    msf_gif
 )

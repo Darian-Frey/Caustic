@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
 
 #include <caustic/indexer.hpp>
 #include <caustic/vec2.hpp>
@@ -163,6 +165,25 @@ void RaylibRenderer::redraw(const std::vector<LayerRender>& layers,
                 DrawLineEx(to_screen(a), to_screen(b), w, to_raylib(col, L.style.stroke.opacity));
             }
         }
+
+        // Points (scatter) — used by strange-attractor generators in
+        // Scatter / Both render modes. Each entry draws as a small filled
+        // circle, coloured by the style's color_map sampled at i / (N-1).
+        // Dot radius derives from stroke.width_min with a small floor so
+        // sub-pixel widths still produce a visible dot.
+        if (!L.geometry.points.empty()) {
+            const std::size_t N = L.geometry.points.size();
+            const float radius = std::max(0.5f,
+                static_cast<float>(L.style.stroke.width_min * 0.5));
+            for (std::size_t i = 0; i < N; ++i) {
+                const double t = (N > 1) ? static_cast<double>(i) /
+                                            static_cast<double>(N - 1) : 0.0;
+                const double tc = remap_cyclic(t, L.style.cyclic);
+                const Color col = L.style.color_map->at(tc);
+                DrawCircleV(to_screen(L.geometry.points[i]), radius,
+                            to_raylib(col, L.style.stroke.opacity));
+            }
+        }
     }
 
     EndTextureMode();
@@ -181,6 +202,36 @@ void RaylibRenderer::blit_to_screen() const {
     };
     // ::Color qualifies raylib's Color since caustic::Color shadows it inside this namespace.
     DrawTexturePro(canvas_.texture, src, dst, {0.0f, 0.0f}, 0.0f, ::Color{255, 255, 255, 255});
+}
+
+bool RaylibRenderer::write_png(const char* path) const {
+    Image img = LoadImageFromTexture(canvas_.texture);
+    // RenderTexture pixels come out bottom-up; flip so the saved image is
+    // right-way-up.
+    ImageFlipVertical(&img);
+    const bool ok = ExportImage(img, path);
+    UnloadImage(img);
+    return ok;
+}
+
+bool RaylibRenderer::read_rgba_frame(unsigned char** out_pixels,
+                                     int* out_w, int* out_h) const {
+    if (!out_pixels || !out_w || !out_h) return false;
+    Image img = LoadImageFromTexture(canvas_.texture);
+    ImageFlipVertical(&img);
+    if (img.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
+        ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    }
+    const std::size_t bytes = static_cast<std::size_t>(img.width) *
+                              static_cast<std::size_t>(img.height) * 4;
+    unsigned char* buf = static_cast<unsigned char*>(std::malloc(bytes));
+    if (!buf) { UnloadImage(img); return false; }
+    std::memcpy(buf, img.data, bytes);
+    *out_pixels = buf;
+    *out_w = img.width;
+    *out_h = img.height;
+    UnloadImage(img);
+    return true;
 }
 
 }  // namespace caustic
