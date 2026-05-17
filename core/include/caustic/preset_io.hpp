@@ -262,6 +262,12 @@ inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
                     colors.push_back(color_to_hex(col));
                 }
             }
+            if (!gs.custom.chord_widths.empty()) {
+                gp["chord_widths"] = gs.custom.chord_widths;
+            }
+            if (!gs.custom.chord_opacities.empty()) {
+                gp["chord_opacities"] = gs.custom.chord_opacities;
+            }
             break;
         }
         case GeneratorType::MaurerRose:
@@ -415,6 +421,9 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
             gs.custom.nails.clear();
             gs.custom.chords.clear();
             gs.custom.chord_colors.clear();
+            gs.custom.chord_end_colors.clear();
+            gs.custom.chord_widths.clear();
+            gs.custom.chord_opacities.clear();
             if (gp.contains("nails") && gp.at("nails").is_array()) {
                 for (const auto& nv : gp.at("nails")) {
                     if (nv.is_array() && nv.size() == 2) {
@@ -443,6 +452,16 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
                     if (col.is_string()) {
                         gs.custom.chord_end_colors.push_back(color_from_hex(col.get<std::string>()));
                     }
+                }
+            }
+            if (gp.contains("chord_widths") && gp.at("chord_widths").is_array()) {
+                for (const auto& v : gp.at("chord_widths")) {
+                    if (v.is_number()) gs.custom.chord_widths.push_back(v.get<double>());
+                }
+            }
+            if (gp.contains("chord_opacities") && gp.at("chord_opacities").is_array()) {
+                for (const auto& v : gp.at("chord_opacities")) {
+                    if (v.is_number()) gs.custom.chord_opacities.push_back(v.get<double>());
                 }
             }
             break;
@@ -600,6 +619,14 @@ inline void to_json(nlohmann::json& j, const Preset& p) {
     c["pan_x_px"] = p.camera.pan_x_px;
     c["pan_y_px"] = p.camera.pan_y_px;
     c["zoom"]     = p.camera.zoom;
+
+    auto& eg = j["editor_grid"] = nlohmann::json::object();
+    eg["mode"]         = (p.editor_grid.mode == EditorGridMode::Polar)
+                            ? "polar" : "rectangular";
+    eg["spacing"]      = p.editor_grid.spacing;
+    eg["polar_spokes"] = p.editor_grid.polar_spokes;
+    eg["visible"]      = p.editor_grid.visible;
+    eg["snap"]         = p.editor_grid.snap;
 }
 
 inline void from_json(const nlohmann::json& j, Preset& p) {
@@ -648,6 +675,17 @@ inline void from_json(const nlohmann::json& j, Preset& p) {
         p.camera.pan_x_px = c.value("pan_x_px", 0.0);
         p.camera.pan_y_px = c.value("pan_y_px", 0.0);
         p.camera.zoom     = c.value("zoom", 1.0);
+    }
+
+    if (j.contains("editor_grid")) {
+        const auto& eg = j.at("editor_grid");
+        const std::string mode_s = eg.value("mode", std::string("rectangular"));
+        p.editor_grid.mode = (mode_s == "polar")
+            ? EditorGridMode::Polar : EditorGridMode::Rectangular;
+        p.editor_grid.spacing      = eg.value("spacing",      0.1);
+        p.editor_grid.polar_spokes = eg.value("polar_spokes", 12);
+        p.editor_grid.visible      = eg.value("visible",      false);
+        p.editor_grid.snap         = eg.value("snap",         false);
     }
 }
 

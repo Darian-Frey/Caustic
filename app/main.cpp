@@ -9,6 +9,8 @@
 #include <numbers>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <caustic/animation.hpp>
@@ -97,6 +99,97 @@ const char* const kGeneratorNames[] = {
 // (nail first if both a nail and a chord are in range).
 enum class NailEditMode { Off, AddNail, AddChord, MoveNail, RecolourChord, Select };
 
+// Editor-grid mode + state now live in caustic::Preset.editor_grid so they
+// round-trip through save/load. See preset.hpp for the EditorGrid struct.
+
+// Draw the editor grid overlay on top of the canvas. Caller passes the
+// screen-coord conversion (cx, cy = canvas centre in pixels, pan x/y in pixels,
+// scale = pixels-per-world-unit). Rectangular mode = axis-aligned lines.
+// Polar mode = concentric circles + N rays from origin.
+inline void draw_grid_overlay(caustic::EditorGridMode mode,
+                              double spacing, int spokes,
+                              double cx, double cy,
+                              double pan_x, double pan_y,
+                              double scale,
+                              int screen_w, int screen_h) {
+    if (spacing < 1e-6) return;
+    const ::Color grid_col{80, 110, 130, 90};
+
+    if (mode == caustic::EditorGridMode::Rectangular) {
+        const double world_x_min = (0.0 - cx - pan_x) / scale;
+        const double world_x_max = (screen_w - cx - pan_x) / scale;
+        const double world_y_min = -((screen_h - cy - pan_y) / scale);
+        const double world_y_max = -((0.0 - cy - pan_y) / scale);
+        if ((world_x_max - world_x_min) / spacing > 400.0) return;
+        if ((world_y_max - world_y_min) / spacing > 400.0) return;
+        const int ix_start = static_cast<int>(std::floor(world_x_min / spacing));
+        const int ix_end   = static_cast<int>(std::ceil(world_x_max / spacing));
+        for (int ix = ix_start; ix <= ix_end; ++ix) {
+            const float sx = static_cast<float>(cx + pan_x + ix * spacing * scale);
+            DrawLine(static_cast<int>(sx), 0,
+                     static_cast<int>(sx), screen_h, grid_col);
+        }
+        const int iy_start = static_cast<int>(std::floor(world_y_min / spacing));
+        const int iy_end   = static_cast<int>(std::ceil(world_y_max / spacing));
+        for (int iy = iy_start; iy <= iy_end; ++iy) {
+            const float sy = static_cast<float>(cy + pan_y - iy * spacing * scale);
+            DrawLine(0, static_cast<int>(sy),
+                     screen_w, static_cast<int>(sy), grid_col);
+        }
+        return;
+    }
+
+    // Polar
+    // Rings: choose a max radius that just covers the visible canvas
+    // (distance from origin to the farthest screen corner).
+    const float ocx = static_cast<float>(cx + pan_x);
+    const float ocy = static_cast<float>(cy + pan_y);
+    auto pixel_dist = [&](double sx, double sy) {
+        const double dx = sx - ocx;
+        const double dy = sy - ocy;
+        return std::sqrt(dx * dx + dy * dy);
+    };
+    const double corner_px = std::max(std::max(pixel_dist(0, 0), pixel_dist(screen_w, 0)),
+                                       std::max(pixel_dist(0, screen_h), pixel_dist(screen_w, screen_h)));
+    const double r_max_world = corner_px / scale;
+    if (r_max_world / spacing > 400.0) return;
+    const int n_rings = static_cast<int>(std::ceil(r_max_world / spacing));
+    for (int i = 1; i <= n_rings; ++i) {
+        const float rpx = static_cast<float>(i * spacing * scale);
+        DrawCircleLines(static_cast<int>(ocx), static_cast<int>(ocy), rpx, grid_col);
+    }
+    const int n = std::max(1, spokes);
+    const double step = 2.0 * std::numbers::pi / static_cast<double>(n);
+    for (int i = 0; i < n; ++i) {
+        const double th = step * i;
+        const float ex = static_cast<float>(ocx + r_max_world * scale * std::cos(th));
+        const float ey = static_cast<float>(ocy - r_max_world * scale * std::sin(th));
+        DrawLine(static_cast<int>(ocx), static_cast<int>(ocy),
+                 static_cast<int>(ex), static_cast<int>(ey), grid_col);
+    }
+}
+
+// Snap a world-coord point to the active grid. spacing > 0 required.
+inline void snap_world_point(double& x, double& y,
+                             caustic::EditorGridMode mode,
+                             double spacing, int spokes) {
+    if (mode == caustic::EditorGridMode::Rectangular) {
+        x = std::round(x / spacing) * spacing;
+        y = std::round(y / spacing) * spacing;
+        return;
+    }
+    // Polar
+    const double r = std::sqrt(x * x + y * y);
+    if (r < 1e-9) { x = 0.0; y = 0.0; return; }
+    const double snapped_r = std::round(r / spacing) * spacing;
+    const int n = std::max(1, spokes);
+    const double step = 2.0 * std::numbers::pi / static_cast<double>(n);
+    const double theta = std::atan2(y, x);
+    const double snapped_theta = std::round(theta / step) * step;
+    x = snapped_r * std::cos(snapped_theta);
+    y = snapped_r * std::sin(snapped_theta);
+}
+
 // Delete the nail at `idx` from a CustomChordParams. Drops any chord that
 // referenced it; re-indexes the remaining chords so indices above `idx` shift
 // down by one. Keeps chord_colors / chord_end_colors aligned with chords.
@@ -106,8 +199,12 @@ inline void delete_nail_in_custom(caustic::CustomChordParams& c, int idx) {
     std::vector<std::pair<int, int>> kept_chords;
     std::vector<caustic::Color>      kept_colors;
     std::vector<caustic::Color>      kept_end_colors;
+    std::vector<double>              kept_widths;
+    std::vector<double>              kept_opacities;
     const bool have_colors     = c.chord_colors.size()     == c.chords.size();
     const bool have_end_colors = c.chord_end_colors.size() == c.chords.size();
+    const bool have_widths     = c.chord_widths.size()     == c.chords.size();
+    const bool have_opacities  = c.chord_opacities.size()  == c.chords.size();
     for (std::size_t k = 0; k < c.chords.size(); ++k) {
         auto p = c.chords[k];
         if (p.first == idx || p.second == idx) continue;
@@ -116,13 +213,17 @@ inline void delete_nail_in_custom(caustic::CustomChordParams& c, int idx) {
         kept_chords.push_back(p);
         if (have_colors)     kept_colors.push_back(c.chord_colors[k]);
         if (have_end_colors) kept_end_colors.push_back(c.chord_end_colors[k]);
+        if (have_widths)     kept_widths.push_back(c.chord_widths[k]);
+        if (have_opacities)  kept_opacities.push_back(c.chord_opacities[k]);
     }
     c.chords = std::move(kept_chords);
     if (have_colors)     c.chord_colors     = std::move(kept_colors);
     if (have_end_colors) c.chord_end_colors = std::move(kept_end_colors);
+    if (have_widths)     c.chord_widths     = std::move(kept_widths);
+    if (have_opacities)  c.chord_opacities  = std::move(kept_opacities);
 }
 
-// Delete the chord at `idx` (and its corresponding colour entries).
+// Delete the chord at `idx` (and its corresponding per-chord override entries).
 inline void delete_chord_in_custom(caustic::CustomChordParams& c, int idx) {
     if (idx < 0 || idx >= static_cast<int>(c.chords.size())) return;
     c.chords.erase(c.chords.begin() + idx);
@@ -131,6 +232,12 @@ inline void delete_chord_in_custom(caustic::CustomChordParams& c, int idx) {
     }
     if (idx < static_cast<int>(c.chord_end_colors.size())) {
         c.chord_end_colors.erase(c.chord_end_colors.begin() + idx);
+    }
+    if (idx < static_cast<int>(c.chord_widths.size())) {
+        c.chord_widths.erase(c.chord_widths.begin() + idx);
+    }
+    if (idx < static_cast<int>(c.chord_opacities.size())) {
+        c.chord_opacities.erase(c.chord_opacities.begin() + idx);
     }
 }
 
@@ -182,12 +289,23 @@ struct AppState {
     int lenv_dragging_idx = -1;
     std::vector<caustic::LinearEnvelopeParams> lenv_undo_stack;
     std::vector<caustic::LinearEnvelopeParams> lenv_redo_stack;
-    bool nail_grid_visible = false;  // draw a faint grid overlay in edit view
-    bool nail_grid_snap = false;     // snap newly-placed nails to grid intersections
-    double nail_grid_spacing = 0.1;  // world-units between grid lines
-    bool nail_numbers_visible = true; // draw the index label above each nail
+    // Set true on left-press when the click didn't grab any editable target
+    // (a LinearEnvelope handle, or a CustomChord nail/chord depending on mode).
+    // While true, left-click drag pans the canvas — gives left-click drag pan
+    // in every layer/mode without breaking the editor's on-target interactions.
+    bool left_drag_pan = false;
+    // Editor grid state moved into preset.editor_grid so saves persist it.
+    bool nail_numbers_visible = true; // draw the index label above each nail (UI-only)
     caustic::Color nail_active_color    {0.9, 0.9, 0.9, 1.0};  // chord start colour
     caustic::Color nail_active_color_end{0.9, 0.9, 0.9, 1.0};  // chord end colour (== start = solid)
+    // Per-chord stroke for newly-placed chords in AddChord mode. When equal to
+    // the defaults below, AddChord skips pushing to chord_widths/chord_opacities
+    // so the layer style's stroke wins by default. Different from defaults
+    // implies the user actively wants overrides, so we populate the buffers.
+    double nail_active_width   = 0.8;
+    double nail_active_opacity = 0.6;
+    static constexpr double nail_default_width   = 0.8;
+    static constexpr double nail_default_opacity = 0.6;
 
     // Undo/redo for the *current layer's* CustomChordParams only. Snapshot-
     // based: every atomic edit (add nail, add chord, delete, recolour, clear)
@@ -283,6 +401,168 @@ std::vector<fs::path> list_presets(const fs::path& dir) {
 void refresh_preset_lists(AppState& state) {
     state.bundled_presets = list_presets("presets");
     state.user_presets = list_presets(caustic::user_preset_dir());
+}
+
+// ---------------------------------------------------------------------------
+// Preset thumbnail cache. Lazily renders each preset into a small Texture2D on
+// first display in the preset panel. Subsequent frames reuse the texture.
+//
+// Uses one shared small RaylibRenderer (allocated once in main) as the
+// offscreen draw target; per-preset, we render → copy texture → flip vertical
+// → upload as Texture2D → store. Failed renders are remembered so we don't
+// retry a broken preset every frame.
+
+struct ThumbnailCache {
+    int size_px = 96;
+    std::unordered_map<std::string, Texture2D> textures;
+    std::unordered_set<std::string> failed;
+
+    ~ThumbnailCache() { clear(); }
+
+    void clear() {
+        for (auto& [_, tex] : textures) UnloadTexture(tex);
+        textures.clear();
+        failed.clear();
+    }
+
+    void invalidate(const fs::path& path) {
+        const std::string key = path.string();
+        auto it = textures.find(key);
+        if (it != textures.end()) {
+            UnloadTexture(it->second);
+            textures.erase(it);
+        }
+        failed.erase(key);
+    }
+
+    // Returns a pointer to the cached texture or renders one on the spot.
+    // nullptr means rendering failed (cached in `failed` so we don't retry).
+    const Texture2D* get_or_render(const fs::path& path,
+                                   caustic::RaylibRenderer& mini) {
+        const std::string key = path.string();
+        if (failed.count(key)) return nullptr;
+        auto it = textures.find(key);
+        if (it != textures.end()) return &it->second;
+        try {
+            caustic::Preset preset = caustic::load_preset(path);
+            // Render at neutral camera so the thumbnail always shows the
+            // canonical framing — the user's saved pan/zoom is irrelevant
+            // at thumbnail scale.
+            caustic::CameraState cam{};
+            mini.redraw(caustic::build_renderables(preset.scene, /*coarse=*/true),
+                        preset.scene.background, cam);
+            Image img = LoadImageFromTexture(mini.canvas_texture());
+            ImageFlipVertical(&img);
+            Texture2D tex = LoadTextureFromImage(img);
+            UnloadImage(img);
+            auto [ins_it, _] = textures.emplace(key, tex);
+            return &ins_it->second;
+        } catch (const std::exception&) {
+            failed.insert(key);
+            return nullptr;
+        }
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Preset save/open/export helpers — shared by the Preset panel and the
+// Ctrl+S / Ctrl+O / Ctrl+E keyboard shortcuts.
+
+void quick_save_preset(AppState& state, ThumbnailCache* thumbs = nullptr) {
+    try {
+        const std::string name = state.save_name_buf;
+        const fs::path path = caustic::user_preset_dir() / (name + ".json");
+        state.preset.name = name;
+        caustic::save_preset(path, state.preset);
+        state.status_message = "saved " + path.string();
+        refresh_preset_lists(state);
+        if (thumbs) thumbs->invalidate(path);
+    } catch (const std::exception& e) {
+        state.status_message = std::string("save failed: ") + e.what();
+    }
+}
+
+void save_as_preset(AppState& state, ThumbnailCache* thumbs = nullptr) {
+    const fs::path chosen = pick_save_file(
+        caustic::user_preset_dir(),
+        std::string(state.save_name_buf) + ".json",
+        "Caustic preset (*.json)", "*.json");
+    if (chosen.empty()) return;
+    try {
+        state.preset.name = chosen.stem().string();
+        std::strncpy(state.save_name_buf, state.preset.name.c_str(),
+                     sizeof(state.save_name_buf) - 1);
+        state.save_name_buf[sizeof(state.save_name_buf) - 1] = '\0';
+        caustic::save_preset(chosen, state.preset);
+        state.status_message = "saved " + chosen.string();
+        refresh_preset_lists(state);
+        if (thumbs) thumbs->invalidate(chosen);
+    } catch (const std::exception& e) {
+        state.status_message = std::string("save failed: ") + e.what();
+    }
+}
+
+void load_preset_path(AppState& state, const fs::path& path) {
+    try {
+        state.preset = caustic::load_preset(path);
+        std::strncpy(state.save_name_buf, state.preset.name.c_str(),
+                     sizeof(state.save_name_buf) - 1);
+        state.save_name_buf[sizeof(state.save_name_buf) - 1] = '\0';
+        state.status_message = "loaded " + path.string();
+        state.dirty = true;
+    } catch (const std::exception& e) {
+        state.status_message = std::string("load failed: ") + e.what();
+    }
+}
+
+void open_preset_dialog(AppState& state) {
+    const fs::path chosen = pick_open_file(
+        caustic::user_preset_dir(),
+        "Caustic preset (*.json)", "*.json");
+    if (!chosen.empty()) load_preset_path(state, chosen);
+}
+
+void export_svg_to_path(AppState& state, const fs::path& path) {
+    try {
+        caustic::SvgOptions opts;
+        opts.width = static_cast<double>(state.export_size);
+        opts.height = static_cast<double>(state.export_size);
+        opts.plotter_mode = state.export_plotter_mode;
+        caustic::write_svg(path,
+                           caustic::build_renderables(state.preset.scene, /*coarse=*/false),
+                           state.preset.scene.background, opts);
+        state.status_message = "exported " + path.string();
+    } catch (const std::exception& e) {
+        state.status_message = std::string("export failed: ") + e.what();
+    }
+}
+
+void quick_export_svg(AppState& state) {
+    const fs::path path = user_export_dir() / (std::string(state.export_name_buf) + ".svg");
+    export_svg_to_path(state, path);
+}
+
+void export_as_svg(AppState& state) {
+    const fs::path chosen = pick_save_file(
+        user_export_dir(),
+        std::string(state.export_name_buf) + ".svg",
+        "SVG (*.svg)", "*.svg");
+    if (!chosen.empty()) export_svg_to_path(state, chosen);
+}
+
+void reset_preset_to_default(AppState& state) {
+    state.preset = caustic::Preset{};
+    std::strncpy(state.save_name_buf, "untitled", sizeof(state.save_name_buf) - 1);
+    state.save_name_buf[sizeof(state.save_name_buf) - 1] = '\0';
+    state.nail_undo_stack.clear();
+    state.nail_redo_stack.clear();
+    state.lenv_undo_stack.clear();
+    state.lenv_redo_stack.clear();
+    state.selected_nails.clear();
+    state.selected_chords.clear();
+    state.current_layer_idx = 0;
+    state.status_message = "new preset";
+    state.dirty = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -434,13 +714,24 @@ void render_param_panel(AppState& state) {
             ImGui::EndDisabled();
             ImGui::SameLine();
             ImGui::TextDisabled("Ctrl+Z / Ctrl+Y");
-            ImGui::Checkbox("show grid", &state.nail_grid_visible);
+            ImGui::Checkbox("show grid", &state.preset.editor_grid.visible);
             ImGui::SameLine();
-            ImGui::Checkbox("snap to grid", &state.nail_grid_snap);
-            if (slider_double_w("grid spacing", &state.nail_grid_spacing,
+            ImGui::Checkbox("snap to grid", &state.preset.editor_grid.snap);
+            {
+                static const char* const kGridModes[] = {"rectangular", "polar"};
+                int gm = static_cast<int>(state.preset.editor_grid.mode);
+                if (ImGui::Combo("grid mode", &gm, kGridModes, IM_ARRAYSIZE(kGridModes))) {
+                    state.preset.editor_grid.mode = static_cast<caustic::EditorGridMode>(gm);
+                }
+            }
+            if (slider_double_w("grid spacing", &state.preset.editor_grid.spacing,
                                 0.01, 1.0, 0.01, "%.3f")) {}
+            if (state.preset.editor_grid.mode == caustic::EditorGridMode::Polar) {
+                slider_int_w("polar spokes", &state.preset.editor_grid.polar_spokes, 2, 72);
+            }
             ImGui::TextDisabled("Drag the a0/a1/b0/b1 handles on the canvas to reposition endpoints.");
             ImGui::TextDisabled("Drag a handle near another to snap them together (target ringed in yellow).");
+            ImGui::TextDisabled("Pan: middle-click drag, Spacebar + drag, or left-click drag away from any handle");
             ImGui::TextDisabled("(Same grid + snap state as the CustomChord editor.)");
             break;
         }
@@ -582,36 +873,14 @@ void render_param_panel(AppState& state) {
 
             if (ImGui::Button("Delete last nail") && !c.nails.empty()) {
                 push_undo();
-                const int idx = static_cast<int>(c.nails.size()) - 1;
-                c.nails.pop_back();
-                // Drop any chord (and its colours) that referenced this nail.
-                std::vector<std::pair<int, int>> kept_chords;
-                std::vector<caustic::Color> kept_colors;
-                std::vector<caustic::Color> kept_end_colors;
-                const bool have_colors     = c.chord_colors.size()     == c.chords.size();
-                const bool have_end_colors = c.chord_end_colors.size() == c.chords.size();
-                kept_chords.reserve(c.chords.size());
-                if (have_colors)     kept_colors.reserve(c.chord_colors.size());
-                if (have_end_colors) kept_end_colors.reserve(c.chord_end_colors.size());
-                for (std::size_t k = 0; k < c.chords.size(); ++k) {
-                    const auto& p = c.chords[k];
-                    if (p.first == idx || p.second == idx) continue;
-                    kept_chords.push_back(p);
-                    if (have_colors)     kept_colors.push_back(c.chord_colors[k]);
-                    if (have_end_colors) kept_end_colors.push_back(c.chord_end_colors[k]);
-                }
-                c.chords = std::move(kept_chords);
-                if (have_colors)     c.chord_colors     = std::move(kept_colors);
-                if (have_end_colors) c.chord_end_colors = std::move(kept_end_colors);
+                delete_nail_in_custom(c, static_cast<int>(c.nails.size()) - 1);
                 state.nail_chord_first = -1;
                 state.dirty = true;
             }
             ImGui::SameLine();
             if (ImGui::Button("Delete last chord") && !c.chords.empty()) {
                 push_undo();
-                c.chords.pop_back();
-                if (!c.chord_colors.empty())     c.chord_colors.pop_back();
-                if (!c.chord_end_colors.empty()) c.chord_end_colors.pop_back();
+                delete_chord_in_custom(c, static_cast<int>(c.chords.size()) - 1);
                 state.dirty = true;
             }
             ImGui::SameLine();
@@ -621,6 +890,8 @@ void render_param_panel(AppState& state) {
                 c.chords.clear();
                 c.chord_colors.clear();
                 c.chord_end_colors.clear();
+                c.chord_widths.clear();
+                c.chord_opacities.clear();
                 state.nail_chord_first = -1;
                 state.selected_nails.clear();
                 state.selected_chords.clear();
@@ -707,13 +978,60 @@ void render_param_panel(AppState& state) {
             }
 
             ImGui::Separator();
-            ImGui::Checkbox("show grid", &state.nail_grid_visible);
+            ImGui::TextDisabled("Per-chord stroke (overrides layer style for selected/all chords):");
+            if (slider_double_w("active width",   &state.nail_active_width,   0.1, 8.0, 0.01, "%.2f")) {}
+            if (slider_double_w("active opacity", &state.nail_active_opacity, 0.0, 1.0, 0.01, "%.2f")) {}
+            if (ImGui::Button("Apply width/opacity to all")) {
+                push_undo();
+                c.chord_widths.assign(c.chords.size(), state.nail_active_width);
+                c.chord_opacities.assign(c.chords.size(), state.nail_active_opacity);
+                state.dirty = true;
+            }
             ImGui::SameLine();
-            ImGui::Checkbox("snap to grid", &state.nail_grid_snap);
+            ImGui::BeginDisabled(state.selected_chords.empty());
+            if (ImGui::Button("Apply to selected")) {
+                push_undo();
+                if (c.chord_widths.size() != c.chords.size()) {
+                    c.chord_widths.assign(c.chords.size(), state.nail_default_width);
+                }
+                if (c.chord_opacities.size() != c.chords.size()) {
+                    c.chord_opacities.assign(c.chords.size(), state.nail_default_opacity);
+                }
+                for (int idx : state.selected_chords) {
+                    if (idx >= 0 && idx < static_cast<int>(c.chord_widths.size())) {
+                        c.chord_widths[idx]    = state.nail_active_width;
+                        c.chord_opacities[idx] = state.nail_active_opacity;
+                    }
+                }
+                state.dirty = true;
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            if (ImGui::Button("Clear stroke overrides (use style)")) {
+                push_undo();
+                c.chord_widths.clear();
+                c.chord_opacities.clear();
+                state.dirty = true;
+            }
+
+            ImGui::Separator();
+            ImGui::Checkbox("show grid", &state.preset.editor_grid.visible);
+            ImGui::SameLine();
+            ImGui::Checkbox("snap to grid", &state.preset.editor_grid.snap);
             ImGui::SameLine();
             ImGui::Checkbox("show pin numbers", &state.nail_numbers_visible);
-            if (slider_double_w("grid spacing", &state.nail_grid_spacing,
+            {
+                static const char* const kGridModes[] = {"rectangular", "polar"};
+                int gm = static_cast<int>(state.preset.editor_grid.mode);
+                if (ImGui::Combo("grid mode", &gm, kGridModes, IM_ARRAYSIZE(kGridModes))) {
+                    state.preset.editor_grid.mode = static_cast<caustic::EditorGridMode>(gm);
+                }
+            }
+            if (slider_double_w("grid spacing", &state.preset.editor_grid.spacing,
                                 0.01, 1.0, 0.01, "%.3f")) {}
+            if (state.preset.editor_grid.mode == caustic::EditorGridMode::Polar) {
+                slider_int_w("polar spokes", &state.preset.editor_grid.polar_spokes, 2, 72);
+            }
 
             ImGui::TextDisabled("add nail: left-click on canvas drops a nail");
             ImGui::TextDisabled("add chord: left-click two nails to connect them — new chord takes active colours (start, end)");
@@ -721,7 +1039,7 @@ void render_param_panel(AppState& state) {
             ImGui::TextDisabled("recolour chord: left-click on an existing chord to apply active start/end colours");
             ImGui::TextDisabled("select: click an item to select it (Shift+click toggles); drag empty space for rubber-band; Delete removes");
             ImGui::TextDisabled("Right-click (any mode): erase the nail or chord under the cursor");
-            ImGui::TextDisabled("Edit mode = off: left-click drag pans the canvas (or use middle-click drag).");
+            ImGui::TextDisabled("Pan: middle-click drag, Spacebar + drag, or left-click drag on empty space");
             ImGui::TextDisabled("Save the layer as a preset to keep the pattern.");
             break;
         }
@@ -1326,7 +1644,9 @@ void render_animation_panel(AppState& state, caustic::RaylibRenderer& renderer) 
     ImGui::End();
 }
 
-void render_preset_panel(AppState& state) {
+void render_preset_panel(AppState& state,
+                         caustic::RaylibRenderer& thumb_renderer,
+                         ThumbnailCache& thumbs) {
     ImGui::Begin("Presets");
 
     // Save section. Quick "Save" writes to the default XDG dir using the
@@ -1336,38 +1656,11 @@ void render_preset_panel(AppState& state) {
     ImGui::InputText("name", state.save_name_buf, sizeof(state.save_name_buf));
     ImGui::PopItemWidth();
     ImGui::SameLine();
-    if (ImGui::Button("Save")) {
-        try {
-            const std::string name = state.save_name_buf;
-            const fs::path path = caustic::user_preset_dir() / (name + ".json");
-            state.preset.name = name;
-            caustic::save_preset(path, state.preset);
-            state.status_message = "saved " + path.string();
-            refresh_preset_lists(state);
-        } catch (const std::exception& e) {
-            state.status_message = std::string("save failed: ") + e.what();
-        }
-    }
+    if (ImGui::Button("Save")) quick_save_preset(state, &thumbs);
     ImGui::SameLine();
-    if (ImGui::Button("Save as…")) {
-        const fs::path chosen = pick_save_file(
-            caustic::user_preset_dir(),
-            std::string(state.save_name_buf) + ".json",
-            "Caustic preset (*.json)", "*.json");
-        if (!chosen.empty()) {
-            try {
-                state.preset.name = chosen.stem().string();
-                std::strncpy(state.save_name_buf, state.preset.name.c_str(),
-                             sizeof(state.save_name_buf) - 1);
-                state.save_name_buf[sizeof(state.save_name_buf) - 1] = '\0';
-                caustic::save_preset(chosen, state.preset);
-                state.status_message = "saved " + chosen.string();
-                refresh_preset_lists(state);
-            } catch (const std::exception& e) {
-                state.status_message = std::string("save failed: ") + e.what();
-            }
-        }
-    }
+    if (ImGui::Button("Save as…")) save_as_preset(state, &thumbs);
+    ImGui::SameLine();
+    if (ImGui::Button("New")) reset_preset_to_default(state);
 
     if (!state.status_message.empty()) {
         ImGui::TextDisabled("%s", state.status_message.c_str());
@@ -1375,24 +1668,7 @@ void render_preset_panel(AppState& state) {
 
     ImGui::Separator();
 
-    auto try_load = [&](const fs::path& path) {
-        try {
-            state.preset = caustic::load_preset(path);
-            std::strncpy(state.save_name_buf, state.preset.name.c_str(), sizeof(state.save_name_buf) - 1);
-            state.save_name_buf[sizeof(state.save_name_buf) - 1] = '\0';
-            state.status_message = "loaded " + path.string();
-            state.dirty = true;
-        } catch (const std::exception& e) {
-            state.status_message = std::string("load failed: ") + e.what();
-        }
-    };
-
-    if (ImGui::Button("Open…")) {
-        const fs::path chosen = pick_open_file(
-            caustic::user_preset_dir(),
-            "Caustic preset (*.json)", "*.json");
-        if (!chosen.empty()) try_load(chosen);
-    }
+    if (ImGui::Button("Open…")) open_preset_dialog(state);
     ImGui::SameLine();
 
     auto render_list = [&](const char* heading, const std::vector<fs::path>& paths) {
@@ -1400,10 +1676,19 @@ void render_preset_panel(AppState& state) {
             if (paths.empty()) {
                 ImGui::TextDisabled("  (none)");
             }
+            const float thumb_px = 48.0f;
             for (const auto& path : paths) {
                 ImGui::PushID(path.string().c_str());
-                if (ImGui::Selectable(path.stem().string().c_str())) {
-                    try_load(path);
+                const Texture2D* tex = thumbs.get_or_render(path, thumb_renderer);
+                if (tex) {
+                    rlImGuiImageSize(tex, static_cast<int>(thumb_px), static_cast<int>(thumb_px));
+                } else {
+                    ImGui::Dummy({thumb_px, thumb_px});
+                }
+                ImGui::SameLine();
+                if (ImGui::Selectable(path.stem().string().c_str(), false, 0,
+                                      {0, thumb_px})) {
+                    load_preset_path(state, path);
                 }
                 ImGui::PopID();
             }
@@ -1413,7 +1698,7 @@ void render_preset_panel(AppState& state) {
     render_list("Bundled", state.bundled_presets);
     render_list("User", state.user_presets);
 
-    if (ImGui::Button("Refresh")) refresh_preset_lists(state);
+    if (ImGui::Button("Refresh")) { refresh_preset_lists(state); thumbs.clear(); }
 
     ImGui::Separator();
     ImGui::Text("Export SVG (default dir: %s)", user_export_dir().string().c_str());
@@ -1423,35 +1708,11 @@ void render_preset_panel(AppState& state) {
     ImGui::SliderInt("size", &state.export_size, 256, 4096);
     ImGui::Checkbox("plotter mode (single colour, no opacity, sorted)", &state.export_plotter_mode);
 
-    auto do_export = [&](const fs::path& path) {
-        try {
-            caustic::SvgOptions opts;
-            opts.width = static_cast<double>(state.export_size);
-            opts.height = static_cast<double>(state.export_size);
-            opts.plotter_mode = state.export_plotter_mode;
-            // Export always runs at full quality — see ARCHITECTURE.md §5.4.
-            caustic::write_svg(path,
-                               caustic::build_renderables(state.preset.scene, /*coarse=*/false),
-                               state.preset.scene.background,
-                               opts);
-            state.status_message = "exported " + path.string();
-        } catch (const std::exception& e) {
-            state.status_message = std::string("export failed: ") + e.what();
-        }
-    };
-
-    if (ImGui::Button("Export SVG")) {
-        const fs::path path = user_export_dir() / (std::string(state.export_name_buf) + ".svg");
-        do_export(path);
-    }
+    if (ImGui::Button("Export SVG")) quick_export_svg(state);
     ImGui::SameLine();
-    if (ImGui::Button("Export as…")) {
-        const fs::path chosen = pick_save_file(
-            user_export_dir(),
-            std::string(state.export_name_buf) + ".svg",
-            "SVG (*.svg)", "*.svg");
-        if (!chosen.empty()) do_export(chosen);
-    }
+    if (ImGui::Button("Export as…")) export_as_svg(state);
+
+    ImGui::TextDisabled("Shortcuts: Ctrl+S save  Ctrl+Shift+S save as  Ctrl+O open  Ctrl+E export  Ctrl+N new");
 
     ImGui::End();
 }
@@ -1474,6 +1735,10 @@ int main() {
     // gone — that was the source of the on-exit segfault.
     {
         caustic::RaylibRenderer renderer(kInitialWidth, kInitialHeight);
+        // Dedicated small renderer for preset thumbnails so building them
+        // doesn't clobber the main canvas. Reused across all thumb renders.
+        caustic::RaylibRenderer thumb_renderer(96, 96);
+        ThumbnailCache thumbs;
         AppState state;
         refresh_preset_lists(state);
 
@@ -1486,16 +1751,28 @@ int main() {
         }
 
         if (!io.WantCaptureMouse) {
-            // Pan: always available on middle-click; also on left-click when
-            // the current layer is *not* in an interactive editing context
-            // (CustomChord nail editor with a non-Off mode, OR an active
-            // LinearEnvelope endpoint drag).
+            // Pan rules:
+            //   • Middle-click drag → always pans (every generator/mode).
+            //   • Spacebar + left-drag → always pans (universal escape hatch
+            //     that works even inside CustomChord edit modes).
+            //   • Plain left-drag → pans when nothing editable was grabbed:
+            //       - Off layers (most generators) always
+            //       - LinearEnvelope if the press missed all 4 handles
+            //       - CustomChord AddChord/MoveNail/RecolourChord if the
+            //         press missed its target
+            //       (`state.left_drag_pan` is set true on press in those
+            //       miss-cases by the editor's hit-tests below.)
+            const bool space_held = IsKeyDown(KEY_SPACE);
             const bool nail_editing =
                 state.current_layer().generator.type == caustic::GeneratorType::CustomChord &&
                 state.nail_edit_mode != NailEditMode::Off;
-            const bool lenv_editing =
+            const bool lenv_layer =
                 state.current_layer().generator.type == caustic::GeneratorType::LinearEnvelope;
-            const bool pan_left = !nail_editing && !lenv_editing && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+            const bool plain_left_pannable = !nail_editing && !lenv_layer;
+            const bool left_down = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+            const bool pan_left = left_down && (space_held ||
+                                                plain_left_pannable ||
+                                                state.left_drag_pan);
             if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE) || pan_left) {
                 const Vector2 d = GetMouseDelta();
                 if (d.x != 0.0f || d.y != 0.0f) {
@@ -1503,6 +1780,9 @@ int main() {
                     state.preset.camera.pan_y_px += d.y;
                     state.dirty = true;
                 }
+            }
+            if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+                state.left_drag_pan = false;
             }
             const float wheel = GetMouseWheelMove();
             if (wheel != 0.0f) {
@@ -1581,9 +1861,10 @@ int main() {
                         return best;
                     };
                     auto maybe_snap = [&](double& x, double& y) {
-                        if (state.nail_grid_snap && state.nail_grid_spacing > 1e-6) {
-                            x = std::round(x / state.nail_grid_spacing) * state.nail_grid_spacing;
-                            y = std::round(y / state.nail_grid_spacing) * state.nail_grid_spacing;
+                        if (state.preset.editor_grid.snap && state.preset.editor_grid.spacing > 1e-6) {
+                            snap_world_point(x, y, state.preset.editor_grid.mode,
+                                             state.preset.editor_grid.spacing,
+                                             state.preset.editor_grid.polar_spokes);
                         }
                     };
 
@@ -1595,6 +1876,10 @@ int main() {
                             state.dirty = true;
                         } else if (state.nail_edit_mode == NailEditMode::AddChord) {
                             const int best = find_nail_near(world_x, world_y);
+                            if (best < 0) {
+                                // Press missed any nail — empty-space drag pans.
+                                state.left_drag_pan = true;
+                            }
                             if (best >= 0) {
                                 if (state.nail_chord_first < 0) {
                                     state.nail_chord_first = best;
@@ -1603,6 +1888,18 @@ int main() {
                                     custom.chords.push_back({state.nail_chord_first, best});
                                     custom.chord_colors.push_back(state.nail_active_color);
                                     custom.chord_end_colors.push_back(state.nail_active_color_end);
+                                    if (!custom.chord_widths.empty() ||
+                                        state.nail_active_width != state.nail_default_width) {
+                                        if (custom.chord_widths.size() < custom.chords.size() - 1)
+                                            custom.chord_widths.assign(custom.chords.size() - 1, state.nail_default_width);
+                                        custom.chord_widths.push_back(state.nail_active_width);
+                                    }
+                                    if (!custom.chord_opacities.empty() ||
+                                        state.nail_active_opacity != state.nail_default_opacity) {
+                                        if (custom.chord_opacities.size() < custom.chords.size() - 1)
+                                            custom.chord_opacities.assign(custom.chords.size() - 1, state.nail_default_opacity);
+                                        custom.chord_opacities.push_back(state.nail_active_opacity);
+                                    }
                                     state.nail_chord_first = -1;
                                     state.dirty = true;
                                 } else {
@@ -1615,9 +1912,15 @@ int main() {
                             if (best >= 0) {
                                 push_undo_canvas();
                                 state.nail_dragging_idx = best;
+                            } else {
+                                // Empty-space drag pans the canvas.
+                                state.left_drag_pan = true;
                             }
                         } else if (state.nail_edit_mode == NailEditMode::RecolourChord) {
                             const int idx = find_chord_near(world_x, world_y);
+                            if (idx < 0) {
+                                state.left_drag_pan = true;
+                            }
                             if (idx >= 0) {
                                 push_undo_canvas();
                                 // Pad the colour arrays so they line up with
@@ -1785,9 +2088,10 @@ int main() {
                         &lenv.a_start, &lenv.a_end, &lenv.b_start, &lenv.b_end
                     };
                     auto maybe_snap = [&](double& x, double& y) {
-                        if (state.nail_grid_snap && state.nail_grid_spacing > 1e-6) {
-                            x = std::round(x / state.nail_grid_spacing) * state.nail_grid_spacing;
-                            y = std::round(y / state.nail_grid_spacing) * state.nail_grid_spacing;
+                        if (state.preset.editor_grid.snap && state.preset.editor_grid.spacing > 1e-6) {
+                            snap_world_point(x, y, state.preset.editor_grid.mode,
+                                             state.preset.editor_grid.spacing,
+                                             state.preset.editor_grid.polar_spokes);
                         }
                     };
 
@@ -1807,6 +2111,8 @@ int main() {
                                 state.lenv_undo_stack.erase(state.lenv_undo_stack.begin());
                             state.lenv_redo_stack.clear();
                             state.lenv_dragging_idx = best;
+                        } else {
+                            state.left_drag_pan = true;
                         }
                     }
 
@@ -1886,6 +2192,21 @@ int main() {
             // Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z) for CustomChord undo/redo.
             const bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
             const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+
+            // Global shortcuts. Guarded with Ctrl so the bare 1..4 generator
+            // hotkeys above keep working unchanged.
+            if (ctrl) {
+                if (IsKeyPressed(KEY_S)) {
+                    if (shift) save_as_preset(state, &thumbs);
+                    else       quick_save_preset(state, &thumbs);
+                }
+                if (IsKeyPressed(KEY_O)) open_preset_dialog(state);
+                if (IsKeyPressed(KEY_E)) {
+                    if (shift) export_as_svg(state); else quick_export_svg(state);
+                }
+                if (IsKeyPressed(KEY_N)) reset_preset_to_default(state);
+            }
+
             if (ctrl && state.current_layer().generator.type == caustic::GeneratorType::CustomChord) {
                 auto& cc = state.current_layer().generator.custom;
                 if (IsKeyPressed(KEY_Z) && !shift && !state.nail_undo_stack.empty()) {
@@ -1988,33 +2309,15 @@ int main() {
                 const double cy = GetScreenHeight() / 2.0;
                 const double scale = renderer.last_fit_scale() * state.preset.camera.zoom;
                 if (scale > 1e-9) {
-                    // Grid overlay first so the nails draw on top of it.
-                    if (state.nail_grid_visible && state.nail_grid_spacing > 1e-6) {
-                        const double spacing = state.nail_grid_spacing;
-                        const double world_x_min = (0.0 - cx - state.preset.camera.pan_x_px) / scale;
-                        const double world_x_max = (GetScreenWidth() - cx - state.preset.camera.pan_x_px) / scale;
-                        const double world_y_min = -((GetScreenHeight() - cy - state.preset.camera.pan_y_px) / scale);
-                        const double world_y_max = -((0.0 - cy - state.preset.camera.pan_y_px) / scale);
-                        const double range_x = world_x_max - world_x_min;
-                        const double range_y = world_y_max - world_y_min;
-                        // Cap the line count so a tiny spacing + zoomed-out view doesn't grind.
-                        if (range_x / spacing < 400.0 && range_y / spacing < 400.0) {
-                            const ::Color grid_col{80, 110, 130, 90};
-                            const int ix_start = static_cast<int>(std::floor(world_x_min / spacing));
-                            const int ix_end   = static_cast<int>(std::ceil(world_x_max / spacing));
-                            for (int ix = ix_start; ix <= ix_end; ++ix) {
-                                const float sx = static_cast<float>(cx + state.preset.camera.pan_x_px + ix * spacing * scale);
-                                DrawLine(static_cast<int>(sx), 0,
-                                         static_cast<int>(sx), GetScreenHeight(), grid_col);
-                            }
-                            const int iy_start = static_cast<int>(std::floor(world_y_min / spacing));
-                            const int iy_end   = static_cast<int>(std::ceil(world_y_max / spacing));
-                            for (int iy = iy_start; iy <= iy_end; ++iy) {
-                                const float sy = static_cast<float>(cy + state.preset.camera.pan_y_px - iy * spacing * scale);
-                                DrawLine(0, static_cast<int>(sy),
-                                         GetScreenWidth(), static_cast<int>(sy), grid_col);
-                            }
-                        }
+                    if (state.preset.editor_grid.visible) {
+                        draw_grid_overlay(state.preset.editor_grid.mode,
+                                          state.preset.editor_grid.spacing,
+                                          state.preset.editor_grid.polar_spokes,
+                                          cx, cy,
+                                          state.preset.camera.pan_x_px,
+                                          state.preset.camera.pan_y_px,
+                                          scale,
+                                          GetScreenWidth(), GetScreenHeight());
                     }
 
                     const auto& custom = edit_layer_for_overlay.generator.custom;
@@ -2117,30 +2420,15 @@ int main() {
                 const double cy = GetScreenHeight() / 2.0;
                 const double scale = renderer.last_fit_scale() * state.preset.camera.zoom;
                 if (scale > 1e-9) {
-                    if (state.nail_grid_visible && state.nail_grid_spacing > 1e-6) {
-                        const double spacing = state.nail_grid_spacing;
-                        const double world_x_min = (0.0 - cx - state.preset.camera.pan_x_px) / scale;
-                        const double world_x_max = (GetScreenWidth() - cx - state.preset.camera.pan_x_px) / scale;
-                        const double world_y_min = -((GetScreenHeight() - cy - state.preset.camera.pan_y_px) / scale);
-                        const double world_y_max = -((0.0 - cy - state.preset.camera.pan_y_px) / scale);
-                        if ((world_x_max - world_x_min) / spacing < 400.0 &&
-                            (world_y_max - world_y_min) / spacing < 400.0) {
-                            const ::Color grid_col{80, 110, 130, 90};
-                            const int ix_start = static_cast<int>(std::floor(world_x_min / spacing));
-                            const int ix_end   = static_cast<int>(std::ceil(world_x_max / spacing));
-                            for (int ix = ix_start; ix <= ix_end; ++ix) {
-                                const float sx = static_cast<float>(cx + state.preset.camera.pan_x_px + ix * spacing * scale);
-                                DrawLine(static_cast<int>(sx), 0,
-                                         static_cast<int>(sx), GetScreenHeight(), grid_col);
-                            }
-                            const int iy_start = static_cast<int>(std::floor(world_y_min / spacing));
-                            const int iy_end   = static_cast<int>(std::ceil(world_y_max / spacing));
-                            for (int iy = iy_start; iy <= iy_end; ++iy) {
-                                const float sy = static_cast<float>(cy + state.preset.camera.pan_y_px - iy * spacing * scale);
-                                DrawLine(0, static_cast<int>(sy),
-                                         GetScreenWidth(), static_cast<int>(sy), grid_col);
-                            }
-                        }
+                    if (state.preset.editor_grid.visible) {
+                        draw_grid_overlay(state.preset.editor_grid.mode,
+                                          state.preset.editor_grid.spacing,
+                                          state.preset.editor_grid.polar_spokes,
+                                          cx, cy,
+                                          state.preset.camera.pan_x_px,
+                                          state.preset.camera.pan_y_px,
+                                          scale,
+                                          GetScreenWidth(), GetScreenHeight());
                     }
 
                     const auto& lenv = edit_layer_for_overlay.generator.lenv;
@@ -2201,7 +2489,7 @@ int main() {
         render_style_panel(state);
         render_layers_panel(state);
         render_animation_panel(state, renderer);
-        render_preset_panel(state);
+        render_preset_panel(state, thumb_renderer, thumbs);
         const bool active_now = ImGui::IsAnyItemActive();
         rlImGuiEnd();
 

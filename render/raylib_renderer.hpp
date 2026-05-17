@@ -47,6 +47,11 @@ public:
     // world coords. Returns 0 if no redraw has happened yet.
     double last_fit_scale() const { return last_fit_scale_; }
 
+    // Read-only access to the offscreen canvas's GPU texture. The texture is
+    // bottom-up (a raylib RenderTexture artefact); the preset-thumbnail builder
+    // flips it via ImageFlipVertical when copying out.
+    const Texture2D& canvas_texture() const { return canvas_.texture; }
+
 private:
     int width_;
     int height_;

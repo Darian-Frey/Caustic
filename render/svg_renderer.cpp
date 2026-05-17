@@ -172,6 +172,8 @@ void render_layer(std::ostringstream& out, std::size_t idx, const LayerRender& L
         const double max_len = max_chord_length(geo.chords);
         const bool have_overrides = geo.chord_color_overrides.size() == N;
         const bool have_gradient  = geo.chord_end_color_overrides.size() == N;
+        const bool have_widths    = geo.chord_width_overrides.size() == N;
+        const bool have_opacities = geo.chord_opacity_overrides.size() == N;
 
         for (std::size_t i : order) {
             const Chord& c = geo.chords[i];
@@ -191,11 +193,16 @@ void render_layer(std::ostringstream& out, std::size_t idx, const LayerRender& L
                 col_a = style.color_map->at(tc);
                 col_b = col_a;
             }
-            const double w = lerp_width(style.stroke.width_min, style.stroke.width_max, tw);
+            const double w = have_widths
+                ? geo.chord_width_overrides[i]
+                : lerp_width(style.stroke.width_min, style.stroke.width_max, tw);
+            const double style_op = have_opacities
+                ? geo.chord_opacity_overrides[i]
+                : style.stroke.opacity;
 
             if (col_a == col_b) {
                 const std::string hex = opts.plotter_mode ? opts.plotter_color : color_to_hex(col_a);
-                const double op = col_a.a * style.stroke.opacity;
+                const double op = col_a.a * style_op;
                 emit_line(out, to_svg(m, c.a), to_svg(m, c.b), hex, w, op, with_opacity);
             } else {
                 // Gradient: subdivide into 16 sub-segments with lerped colour.
@@ -208,7 +215,7 @@ void render_layer(std::ostringstream& out, std::size_t idx, const LayerRender& L
                     const double tmid = (t0 + t1) * 0.5;
                     const Color seg_col = lerp(col_a, col_b, tmid);
                     const std::string hex = color_to_hex(seg_col);
-                    const double op = seg_col.a * style.stroke.opacity;
+                    const double op = seg_col.a * style_op;
                     emit_line(out, to_svg(m, p0), to_svg(m, p1), hex, w, op, with_opacity);
                 }
             }

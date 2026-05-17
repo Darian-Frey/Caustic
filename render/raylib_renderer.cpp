@@ -119,6 +119,10 @@ void RaylibRenderer::redraw(const std::vector<LayerRender>& layers,
                 L.geometry.chord_color_overrides.size() == N;
             const bool have_gradient =
                 L.geometry.chord_end_color_overrides.size() == N;
+            const bool have_widths =
+                L.geometry.chord_width_overrides.size() == N;
+            const bool have_opacities =
+                L.geometry.chord_opacity_overrides.size() == N;
             for (std::size_t i = 0; i < N; ++i) {
                 const Chord& c = L.geometry.chords[i];
                 const double tw = remap_cyclic(indexer_value(L.style.stroke.width_indexer, c.a, c.b, i, N, max_len), L.style.cyclic);
@@ -131,9 +135,15 @@ void RaylibRenderer::redraw(const std::vector<LayerRender>& layers,
                     col_a = L.style.color_map->at(tc);
                     col_b = col_a;
                 }
-                const float w = static_cast<float>(lerp_width(L.style.stroke.width_min, L.style.stroke.width_max, tw));
+                const double width_v = have_widths
+                    ? L.geometry.chord_width_overrides[i]
+                    : lerp_width(L.style.stroke.width_min, L.style.stroke.width_max, tw);
+                const float w = static_cast<float>(width_v);
+                const double op = have_opacities
+                    ? L.geometry.chord_opacity_overrides[i]
+                    : L.style.stroke.opacity;
                 if (col_a == col_b) {
-                    DrawLineEx(to_screen(c.a), to_screen(c.b), w, to_raylib(col_a, L.style.stroke.opacity));
+                    DrawLineEx(to_screen(c.a), to_screen(c.b), w, to_raylib(col_a, op));
                 } else {
                     // Gradient: subdivide into 16 sub-segments with lerped colour.
                     constexpr int kSubsegments = 16;
@@ -144,7 +154,7 @@ void RaylibRenderer::redraw(const std::vector<LayerRender>& layers,
                         const Vec2 p1{c.a.x + (c.b.x - c.a.x) * t1, c.a.y + (c.b.y - c.a.y) * t1};
                         const double tmid = (t0 + t1) * 0.5;
                         const Color seg_col = lerp(col_a, col_b, tmid);
-                        DrawLineEx(to_screen(p0), to_screen(p1), w, to_raylib(seg_col, L.style.stroke.opacity));
+                        DrawLineEx(to_screen(p0), to_screen(p1), w, to_raylib(seg_col, op));
                     }
                 }
             }

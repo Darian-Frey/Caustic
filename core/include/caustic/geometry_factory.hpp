@@ -151,6 +151,12 @@ inline GeometryBuffer geometry_from_spec(const GeneratorSpec& g, bool coarse = f
                     geo.chord_end_color_overrides = g.custom.chord_end_colors;
                 }
             }
+            if (g.custom.chord_widths.size() == geo.chords.size()) {
+                geo.chord_width_overrides = g.custom.chord_widths;
+            }
+            if (g.custom.chord_opacities.size() == geo.chords.size()) {
+                geo.chord_opacity_overrides = g.custom.chord_opacities;
+            }
             break;
         case GeneratorType::MaurerRose: {
             const int samples = coarse ? std::max(60, g.maurer.samples / 4) : g.maurer.samples;

@@ -222,6 +222,13 @@ struct CustomChordParams {
     std::vector<std::pair<int, int>> chords;
     std::vector<Color> chord_colors;
     std::vector<Color> chord_end_colors;
+    // Optional per-chord stroke overrides. When non-empty AND sized to match
+    // chords.size(), each entry replaces the layer style's stroke for that
+    // chord. Width is in the same units as style.stroke.width_min (raylib
+    // pixels in the app, world units in SVG export — same convention as the
+    // existing stroke). Opacity is a 0..1 multiplier.
+    std::vector<double> chord_widths;
+    std::vector<double> chord_opacities;
 };
 
 // Stacked hourglass / diamond string-art generator. Adjacent modules share
@@ -335,6 +342,34 @@ struct Scene {
 };
 
 // ---------------------------------------------------------------------------
+// Editor grid (persisted with the preset)
+//
+// Captures the canvas-overlay grid used by the CustomChord nail editor and
+// the LinearEnvelope endpoint editor. Saved with the preset so that nails
+// placed against a particular grid (mode + spacing + spokes) can be extended
+// later — without persistence, reloading a preset reset the grid to defaults
+// and newly-placed nails couldn't line up with the saved ones.
+//
+// `mode` chooses rectangular axis-aligned lines or polar (concentric rings +
+// radial spokes). `spacing` is the world-unit gap between rectangular lines
+// or between polar rings. `polar_spokes` is the spoke count in polar mode.
+// `visible` and `snap` are UI preferences (whether the grid is drawn / used
+// for snapping) — also persisted, so the editor reopens in the same mode.
+
+enum class EditorGridMode {
+    Rectangular,
+    Polar,
+};
+
+struct EditorGrid {
+    EditorGridMode mode = EditorGridMode::Rectangular;
+    double spacing = 0.1;
+    int polar_spokes = 12;
+    bool visible = false;
+    bool snap = false;
+};
+
+// ---------------------------------------------------------------------------
 // Top-level preset (v2 = scene-based; v1 readers still accepted via auto-promote
 // in preset_io.hpp).
 
@@ -343,6 +378,7 @@ struct Preset {
     std::string name;
     Scene scene;
     CameraState camera;
+    EditorGrid editor_grid;
 };
 
 }  // namespace caustic

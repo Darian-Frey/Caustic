@@ -70,3 +70,26 @@ TEST_CASE("preset round-trip: custom_chord params survive JSON") {
     CHECK(c.chords[1].first  == 1);
     CHECK(c.chords[1].second == 3);
 }
+
+TEST_CASE("preset round-trip: per-chord widths and opacities survive JSON") {
+    caustic::Preset p;
+    auto& l = p.scene.layers[0];
+    l.generator.type = caustic::GeneratorType::CustomChord;
+    l.generator.custom.nails = {{0, 0}, {1, 0}, {0, 1}};
+    l.generator.custom.chords = {{0, 1}, {1, 2}};
+    l.generator.custom.chord_widths    = {0.5, 2.5};
+    l.generator.custom.chord_opacities = {0.2, 0.9};
+
+    nlohmann::json j;
+    caustic::to_json(j, p);
+    caustic::Preset p2;
+    caustic::from_json(j, p2);
+
+    const auto& c = p2.scene.layers[0].generator.custom;
+    REQUIRE(c.chord_widths.size() == 2);
+    REQUIRE(c.chord_opacities.size() == 2);
+    CHECK(std::abs(c.chord_widths[0]    - 0.5) < 1e-9);
+    CHECK(std::abs(c.chord_widths[1]    - 2.5) < 1e-9);
+    CHECK(std::abs(c.chord_opacities[0] - 0.2) < 1e-9);
+    CHECK(std::abs(c.chord_opacities[1] - 0.9) < 1e-9);
+}

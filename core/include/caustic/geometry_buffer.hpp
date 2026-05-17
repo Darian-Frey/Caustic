@@ -29,6 +29,14 @@ struct GeometryBuffer {
     // chord_end_color_overrides[i] (at endpoint b). When equal to the start
     // colour, the renderer draws a single segment instead of subdividing.
     std::vector<Color> chord_end_color_overrides;
+    // Optional per-chord stroke width (in style pixels). When non-empty AND
+    // its size matches chords.size(), the renderer uses this value instead of
+    // the style's width_min..width_max indexer-based lerp for that chord.
+    std::vector<double> chord_width_overrides;
+    // Optional per-chord stroke opacity (multiplier, 0..1). When non-empty AND
+    // its size matches chords.size(), this replaces the layer style's
+    // stroke.opacity for that chord.
+    std::vector<double> chord_opacity_overrides;
 };
 
 }  // namespace caustic

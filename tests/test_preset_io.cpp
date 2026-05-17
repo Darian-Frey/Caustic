@@ -188,6 +188,44 @@ TEST_CASE("from_json rejects unknown version") {
     CHECK_THROWS(from_json(j, p));
 }
 
+TEST_CASE("editor_grid round-trips through JSON (polar, custom spacing)") {
+    Preset original;
+    original.name = "grid-test";
+    original.editor_grid.mode = EditorGridMode::Polar;
+    original.editor_grid.spacing = 0.075;
+    original.editor_grid.polar_spokes = 24;
+    original.editor_grid.visible = true;
+    original.editor_grid.snap = true;
+
+    nlohmann::json j;
+    to_json(j, original);
+    Preset back;
+    from_json(j, back);
+
+    CHECK(back.editor_grid.mode == EditorGridMode::Polar);
+    CHECK(std::abs(back.editor_grid.spacing - 0.075) < 1e-12);
+    CHECK(back.editor_grid.polar_spokes == 24);
+    CHECK(back.editor_grid.visible == true);
+    CHECK(back.editor_grid.snap == true);
+}
+
+TEST_CASE("editor_grid omitted from old JSON falls back to defaults") {
+    // Simulate a legacy preset with no editor_grid block.
+    Preset original;
+    nlohmann::json j;
+    to_json(j, original);
+    j.erase("editor_grid");
+
+    Preset back;
+    back.editor_grid.spacing = 999.0;  // poison default to make sure from_json overwrites
+    back.editor_grid.polar_spokes = 999;
+    from_json(j, back);
+
+    CHECK(back.editor_grid.mode == EditorGridMode::Rectangular);
+    CHECK(std::abs(back.editor_grid.spacing - 999.0) < 1e-12);  // unchanged, since no block
+    CHECK(back.editor_grid.polar_spokes == 999);
+}
+
 TEST_CASE("save_preset and load_preset round-trip on disk") {
     const fs::path tmp = fs::temp_directory_path() / "caustic_test_preset.json";
     const Preset original = make_modular_preset();
