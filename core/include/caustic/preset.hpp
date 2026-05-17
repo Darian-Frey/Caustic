@@ -30,6 +30,9 @@ enum class GeneratorType {
     Tinkerbell,
     DiamondStack,
     CustomChord,
+    MaurerRose,
+    LissajousChord,
+    SuperformulaChord,
 };
 
 struct ModularChordParams {
@@ -166,6 +169,42 @@ enum class DiamondStackFans {
     Horizontal,
 };
 
+// Maurer rose — N samples of r = sin(n·θ) at angular step `step_deg`,
+// connected in order as a single polyline. With samples=360 and a coprime
+// step (e.g. 71) the polyline shuffles through every sample and produces
+// the dense fractal pattern that gives the figure its name.
+struct MaurerRoseParams {
+    int n = 7;
+    int step_deg = 71;
+    int samples = 360;
+};
+
+// Lissajous-chord — N nails sampled along a Lissajous curve, connected
+// by the modular chord rule (i → round(k·i) mod N). Same a/b integer
+// closure caveat as the plain Lissajous generator.
+struct LissajousChordParams {
+    double A = 1.0;
+    double B = 1.0;
+    int a = 3;        // integer for closure
+    int b = 2;
+    double phi = std::numbers::pi / 2.0;
+    int N = 200;
+    double k = 2.0;
+};
+
+// Superformula-chord — N nails sampled around a Gielis superformula curve,
+// connected by the modular chord rule (i → round(k·i) mod N).
+struct SuperformulaChordParams {
+    double m  = 5.0;
+    double n1 = 2.0;
+    double n2 = 7.0;
+    double n3 = 7.0;
+    double a  = 1.0;
+    double b  = 1.0;
+    int N = 200;
+    double k = 2.0;
+};
+
 // Explicit nail positions + chord pairs. Edited in-app via the canvas
 // nail editor (left-click to place / connect), serialised to JSON, and
 // reloaded losslessly. The escape hatch for hand-authored patterns.
@@ -212,6 +251,9 @@ struct GeneratorSpec {
     TinkerbellParams      tink;
     DiamondStackParams    dstack;
     CustomChordParams     custom;
+    MaurerRoseParams      maurer;
+    LissajousChordParams  lichord;
+    SuperformulaChordParams supchord;
 };
 
 // ---------------------------------------------------------------------------

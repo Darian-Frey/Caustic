@@ -78,6 +78,7 @@ const char* const kGeneratorNames[] = {
     "clifford", "de jong", "tinkerbell",
     "diamond stack",
     "custom chord",
+    "maurer rose", "lissajous chord", "superformula chord",
 };
 
 // Nail-editor mode for the CustomChord generator. AddNail = left-click on
@@ -724,6 +725,37 @@ void render_param_panel(AppState& state) {
             ImGui::TextDisabled("Save the layer as a preset to keep the pattern.");
             break;
         }
+        case caustic::GeneratorType::MaurerRose: {
+            auto& c = p.generator.maurer;
+            if (slider_int_w("n petals",  &c.n,        1, 30))   state.dirty = true;
+            if (slider_int_w("step (deg)", &c.step_deg, 1, 359))  state.dirty = true;
+            if (slider_int_w("samples",   &c.samples,  60, 2000)) state.dirty = true;
+            ImGui::TextDisabled("Coprime step with samples gives the dense Maurer interleave (try step=71 / samples=360).");
+            break;
+        }
+        case caustic::GeneratorType::LissajousChord: {
+            auto& c = p.generator.lichord;
+            if (slider_double_w("A",   &c.A,   0.1, 5.0, 0.01)) state.dirty = true;
+            if (slider_double_w("B",   &c.B,   0.1, 5.0, 0.01)) state.dirty = true;
+            if (slider_int_w("a",      &c.a,   1, 50))          state.dirty = true;
+            if (slider_int_w("b",      &c.b,   1, 50))          state.dirty = true;
+            if (slider_double_w("phi", &c.phi, 0.0, 2.0 * std::numbers::pi, 0.01)) state.dirty = true;
+            if (slider_int_w("N",      &c.N,   3, 2000))        state.dirty = true;
+            if (slider_double_w("k",   &c.k,   0.0, 100.0, 0.01)) state.dirty = true;
+            break;
+        }
+        case caustic::GeneratorType::SuperformulaChord: {
+            auto& c = p.generator.supchord;
+            if (slider_double_w("m",   &c.m,   0.0, 20.0, 0.1, "%.2f")) state.dirty = true;
+            if (slider_double_w("n1",  &c.n1,  0.1, 100.0, 0.1, "%.2f")) state.dirty = true;
+            if (slider_double_w("n2",  &c.n2,  0.0, 100.0, 0.1, "%.2f")) state.dirty = true;
+            if (slider_double_w("n3",  &c.n3,  0.0, 100.0, 0.1, "%.2f")) state.dirty = true;
+            if (slider_double_w("a",   &c.a,   0.1,   5.0, 0.01))        state.dirty = true;
+            if (slider_double_w("b",   &c.b,   0.1,   5.0, 0.01))        state.dirty = true;
+            if (slider_int_w("N",      &c.N,   3, 2000))                 state.dirty = true;
+            if (slider_double_w("k",   &c.k,   0.0, 100.0, 0.01))        state.dirty = true;
+            break;
+        }
     }
 
     if (ImGui::Button("Reset generator params")) {
@@ -741,11 +773,14 @@ void render_param_panel(AppState& state) {
             case caustic::GeneratorType::Phyllotaxis:    p.generator.phyl = caustic::PhyllotaxisParams{};    break;
             case caustic::GeneratorType::PolygonChord:   p.generator.poly = caustic::PolygonChordParams{};   break;
             case caustic::GeneratorType::LinearEnvelope: p.generator.lenv = caustic::LinearEnvelopeParams{}; break;
-            case caustic::GeneratorType::Clifford:       p.generator.clif   = caustic::CliffordParams{};       break;
-            case caustic::GeneratorType::DeJong:         p.generator.dejo   = caustic::DeJongParams{};         break;
-            case caustic::GeneratorType::Tinkerbell:     p.generator.tink   = caustic::TinkerbellParams{};     break;
-            case caustic::GeneratorType::DiamondStack:   p.generator.dstack = caustic::DiamondStackParams{};   break;
-            case caustic::GeneratorType::CustomChord:    p.generator.custom = caustic::CustomChordParams{};    state.nail_chord_first = -1; break;
+            case caustic::GeneratorType::Clifford:          p.generator.clif     = caustic::CliffordParams{};          break;
+            case caustic::GeneratorType::DeJong:            p.generator.dejo     = caustic::DeJongParams{};            break;
+            case caustic::GeneratorType::Tinkerbell:        p.generator.tink     = caustic::TinkerbellParams{};        break;
+            case caustic::GeneratorType::DiamondStack:      p.generator.dstack   = caustic::DiamondStackParams{};      break;
+            case caustic::GeneratorType::CustomChord:       p.generator.custom   = caustic::CustomChordParams{};       state.nail_chord_first = -1; break;
+            case caustic::GeneratorType::MaurerRose:        p.generator.maurer   = caustic::MaurerRoseParams{};        break;
+            case caustic::GeneratorType::LissajousChord:    p.generator.lichord  = caustic::LissajousChordParams{};    break;
+            case caustic::GeneratorType::SuperformulaChord: p.generator.supchord = caustic::SuperformulaChordParams{}; break;
         }
         state.dirty = true;
     }

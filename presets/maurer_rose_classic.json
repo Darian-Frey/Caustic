@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "name": "maurer_rose_classic",
+  "scene": {
+    "background": "#08080c",
+    "layers": [
+      {
+        "name": "maurer rose (n=7, step=71°)",
+        "generator": {
+          "type": "maurer_rose",
+          "params": {
+            "n": 7,
+            "step_deg": 71,
+            "samples": 360
+          }
+        },
+        "style": {
+          "color_map": {
+            "type": "hsv_sweep",
+            "hue_start": 180.0,
+            "hue_end": 340.0,
+            "saturation": 0.7,
+            "value": 0.95
+          },
+          "color_indexer": "by_curve_t",
+          "stroke": {
+            "width_min": 0.55,
+            "width_max": 0.55,
+            "width_indexer": "by_curve_t",
+            "opacity": 0.85
+          },
+          "cyclic": false
+        },
+        "transform": { "translate": [0.0, 0.0], "rotate_rad": 0.0, "scale": 1.0, "mirror_x": false, "mirror_y": false },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}

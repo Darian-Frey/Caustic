@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "name": "superformula_chord_starfish",
+  "scene": {
+    "background": "#0a0a0a",
+    "layers": [
+      {
+        "name": "superformula-chord (m=5 starfish, k=2)",
+        "generator": {
+          "type": "superformula_chord",
+          "params": {
+            "m": 5.0,
+            "n1": 2.0,
+            "n2": 7.0,
+            "n3": 7.0,
+            "a": 1.0,
+            "b": 1.0,
+            "N": 200,
+            "k": 2.0
+          }
+        },
+        "style": {
+          "color_map": {
+            "type": "hsv_sweep",
+            "hue_start": 30.0,
+            "hue_end": 220.0,
+            "saturation": 0.8,
+            "value": 0.95
+          },
+          "color_indexer": "by_chord_index",
+          "stroke": {
+            "width_min": 0.45,
+            "width_max": 0.45,
+            "width_indexer": "by_chord_index",
+            "opacity": 0.75
+          },
+          "cyclic": false
+        },
+        "transform": { "translate": [0.0, 0.0], "rotate_rad": 0.0, "scale": 1.0, "mirror_x": false, "mirror_y": false },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}

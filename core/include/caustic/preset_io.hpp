@@ -69,6 +69,9 @@ inline std::string generator_type_to_string(GeneratorType t) {
         case GeneratorType::Tinkerbell:     return "tinkerbell";
         case GeneratorType::DiamondStack:   return "diamond_stack";
         case GeneratorType::CustomChord:    return "custom_chord";
+        case GeneratorType::MaurerRose:        return "maurer_rose";
+        case GeneratorType::LissajousChord:    return "lissajous_chord";
+        case GeneratorType::SuperformulaChord: return "superformula_chord";
     }
     return "modular_chord";
 }
@@ -88,6 +91,9 @@ inline GeneratorType generator_type_from_string(const std::string& s) {
     if (s == "tinkerbell")      return GeneratorType::Tinkerbell;
     if (s == "diamond_stack")   return GeneratorType::DiamondStack;
     if (s == "custom_chord")    return GeneratorType::CustomChord;
+    if (s == "maurer_rose")        return GeneratorType::MaurerRose;
+    if (s == "lissajous_chord")    return GeneratorType::LissajousChord;
+    if (s == "superformula_chord") return GeneratorType::SuperformulaChord;
     throw std::runtime_error("unknown generator type: " + s);
 }
 
@@ -258,6 +264,30 @@ inline void generator_to_json(nlohmann::json& g, const GeneratorSpec& gs) {
             }
             break;
         }
+        case GeneratorType::MaurerRose:
+            gp["n"]        = gs.maurer.n;
+            gp["step_deg"] = gs.maurer.step_deg;
+            gp["samples"]  = gs.maurer.samples;
+            break;
+        case GeneratorType::LissajousChord:
+            gp["A"]   = gs.lichord.A;
+            gp["B"]   = gs.lichord.B;
+            gp["a"]   = gs.lichord.a;
+            gp["b"]   = gs.lichord.b;
+            gp["phi"] = gs.lichord.phi;
+            gp["N"]   = gs.lichord.N;
+            gp["k"]   = gs.lichord.k;
+            break;
+        case GeneratorType::SuperformulaChord:
+            gp["m"]  = gs.supchord.m;
+            gp["n1"] = gs.supchord.n1;
+            gp["n2"] = gs.supchord.n2;
+            gp["n3"] = gs.supchord.n3;
+            gp["a"]  = gs.supchord.a;
+            gp["b"]  = gs.supchord.b;
+            gp["N"]  = gs.supchord.N;
+            gp["k"]  = gs.supchord.k;
+            break;
     }
 }
 
@@ -417,6 +447,30 @@ inline void generator_from_json(const nlohmann::json& g, GeneratorSpec& gs) {
             }
             break;
         }
+        case GeneratorType::MaurerRose:
+            gs.maurer.n        = gp.value("n",        gs.maurer.n);
+            gs.maurer.step_deg = gp.value("step_deg", gs.maurer.step_deg);
+            gs.maurer.samples  = gp.value("samples",  gs.maurer.samples);
+            break;
+        case GeneratorType::LissajousChord:
+            gs.lichord.A   = gp.value("A",   gs.lichord.A);
+            gs.lichord.B   = gp.value("B",   gs.lichord.B);
+            gs.lichord.a   = gp.value("a",   gs.lichord.a);
+            gs.lichord.b   = gp.value("b",   gs.lichord.b);
+            gs.lichord.phi = gp.value("phi", gs.lichord.phi);
+            gs.lichord.N   = gp.value("N",   gs.lichord.N);
+            gs.lichord.k   = gp.value("k",   gs.lichord.k);
+            break;
+        case GeneratorType::SuperformulaChord:
+            gs.supchord.m  = gp.value("m",  gs.supchord.m);
+            gs.supchord.n1 = gp.value("n1", gs.supchord.n1);
+            gs.supchord.n2 = gp.value("n2", gs.supchord.n2);
+            gs.supchord.n3 = gp.value("n3", gs.supchord.n3);
+            gs.supchord.a  = gp.value("a",  gs.supchord.a);
+            gs.supchord.b  = gp.value("b",  gs.supchord.b);
+            gs.supchord.N  = gp.value("N",  gs.supchord.N);
+            gs.supchord.k  = gp.value("k",  gs.supchord.k);
+            break;
     }
 }
 

@@ -21,6 +21,7 @@ add_executable(test_caustic
     test_attractors.cpp
     test_diamond_stack.cpp
     test_custom_chord.cpp
+    test_hybrids.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
@@ -61,7 +62,9 @@ if(TARGET caustic-cli)
                    swoop_pair bowtie_hourglass
                    diamond_stack_classic diamond_stack_two_colour
                    diamond_star_neon square_grid_2x3
-                   custom_starburst)
+                   custom_starburst
+                   maurer_rose_classic lissajous_chord_classic
+                   superformula_chord_starfish)
         add_test(
             NAME cli_render_${preset}
             COMMAND $<TARGET_FILE:caustic-cli>

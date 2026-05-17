@@ -9,11 +9,14 @@
 #include <caustic/generators/hypotrochoid.hpp>
 #include <caustic/generators/linear_envelope.hpp>
 #include <caustic/generators/lissajous.hpp>
+#include <caustic/generators/lissajous_chord.hpp>
+#include <caustic/generators/maurer_rose.hpp>
 #include <caustic/generators/modular_chord.hpp>
 #include <caustic/generators/phyllotaxis.hpp>
 #include <caustic/generators/polygon.hpp>
 #include <caustic/generators/rose.hpp>
 #include <caustic/generators/superformula.hpp>
+#include <caustic/generators/superformula_chord.hpp>
 #include <caustic/geometry_buffer.hpp>
 #include <caustic/preset.hpp>
 #include <caustic/sampler.hpp>
@@ -149,6 +152,28 @@ inline GeometryBuffer geometry_from_spec(const GeneratorSpec& g, bool coarse = f
                 }
             }
             break;
+        case GeneratorType::MaurerRose: {
+            const int samples = coarse ? std::max(60, g.maurer.samples / 4) : g.maurer.samples;
+            auto pts = maurer_rose(g.maurer.n, g.maurer.step_deg, samples);
+            if (!pts.empty()) geo.polylines.push_back(std::move(pts));
+            break;
+        }
+        case GeneratorType::LissajousChord: {
+            const int N = coarse ? std::max(20, g.lichord.N / 4) : g.lichord.N;
+            geo.chords = lissajous_chord(g.lichord.A, g.lichord.B,
+                                         static_cast<double>(g.lichord.a),
+                                         static_cast<double>(g.lichord.b),
+                                         g.lichord.phi, N, g.lichord.k);
+            break;
+        }
+        case GeneratorType::SuperformulaChord: {
+            const int N = coarse ? std::max(20, g.supchord.N / 4) : g.supchord.N;
+            geo.chords = superformula_chord(g.supchord.m, g.supchord.n1,
+                                            g.supchord.n2, g.supchord.n3,
+                                            g.supchord.a, g.supchord.b,
+                                            N, g.supchord.k);
+            break;
+        }
     }
     return geo;
 }

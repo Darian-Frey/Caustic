@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "name": "lissajous_chord_classic",
+  "scene": {
+    "background": "#0a0a14",
+    "layers": [
+      {
+        "name": "lissajous-chord (3:2, k=51)",
+        "generator": {
+          "type": "lissajous_chord",
+          "params": {
+            "A": 1.0,
+            "B": 1.0,
+            "a": 3,
+            "b": 2,
+            "phi": 1.5707963267948966,
+            "N": 200,
+            "k": 51.0
+          }
+        },
+        "style": {
+          "color_map": {
+            "type": "hsv_sweep",
+            "hue_start": 0.0,
+            "hue_end": 360.0,
+            "saturation": 0.85,
+            "value": 0.95
+          },
+          "color_indexer": "by_chord_index",
+          "stroke": {
+            "width_min": 0.4,
+            "width_max": 0.4,
+            "width_indexer": "by_chord_index",
+            "opacity": 0.55
+          },
+          "cyclic": false
+        },
+        "transform": { "translate": [0.0, 0.0], "rotate_rad": 0.0, "scale": 1.0, "mirror_x": false, "mirror_y": false },
+        "visible": true
+      }
+    ]
+  },
+  "camera": { "pan_x_px": 0.0, "pan_y_px": 0.0, "zoom": 1.0 }
+}
