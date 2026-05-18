@@ -38,3 +38,7 @@ compile_commands.json
 
 # Runtime-generated layout (rewrites on every window move)
 imgui.ini
+
+# AppImage build artifacts (produced by packaging/appimage/build-appimage.sh)
+Caustic-*.AppImage
+Caustic.AppDir/

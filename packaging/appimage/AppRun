@@ -1,0 +1,16 @@
+#!/bin/sh
+# AppRun — entry-point inside a Caustic AppImage.
+#
+# The AppImage runtime mounts our AppDir at $APPDIR (a /tmp/.mount_* path) and
+# invokes this script. We forward stdin/stdout, prepend our bundled libs to
+# LD_LIBRARY_PATH so the dynamic loader finds them before any host copies,
+# and exec the real binary. Argv is passed straight through.
+
+HERE="$(dirname "$(readlink -f "$0")")"
+export APPDIR="$HERE"
+export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Help the binary find its own MIME / icon / XDG metadata if the host XDG_DATA_DIRS
+# doesn't include /usr/share by default (unusual but possible).
+export XDG_DATA_DIRS="$HERE/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+exec "$HERE/usr/bin/caustic" "$@"

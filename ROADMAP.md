@@ -1,8 +1,10 @@
 # Roadmap
 
-Caustic's phased development plan. Each phase ends with a runnable, demonstrable artefact. Phases are append-only — completed phases stay in the document with `[Complete]` markers and ISO dates so the historical sequence is preserved.
+Caustic's phased development plan. Each phase ends with a runnable, demonstrable artefact. Phases are append-only — completed phases stay in the document with `*(complete, YYYY-MM-DD)*` markers so the historical sequence is preserved.
 
 Ordering is firm but not absolute: dependencies between phases (especially Phase 0 → 1, and Phase 4 depending on 1–3) are real, but cosmetic re-ordering within v1.1 is fine.
+
+**Current state (2026-05-18):** Phases 0–11 closed plus a v1.1 polish batch (generators 13–17, full CustomChord editor, scatter attractors, LinearEnvelope drag editor, Keyframed envelope, PNG/GIF/mp4 bake, keyboard shortcuts, polar grid with preset persistence, per-chord stroke overrides, preset thumbnails, universal pan). Only **Phase 12 — Polish & release** remains for a public 1.0.
 
 ---
 
@@ -142,27 +144,27 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
-## Phase 8 — Animation system *(complete, 2026-05-11)*
+## Phase 8 — Animation system *(complete, 2026-05-11; Keyframed envelope landed 2026-05-18 in v1.1 polish)*
 
 **Goal:** Parameter envelopes over time, frame export.
 **Status:** Complete
 **Deliverables:**
 
-- [x] `Envelope` variant: `Static`, `Linear`, `Sine` (Keyframed deferred — three smooth envelopes cover the demo space; keyframes would require a timeline-editor widget that's a separate UX project)
+- [x] `Envelope` variant: `Static`, `Linear`, `Sine`, **`Keyframed`** (Keyframed shipped in v1.1 polish as a table-of-rows editor — `vector<pair<t, value>>` with linear interpolation between adjacent keys and edge clamp)
 - [x] Animation panel with scrub control, play/pause, duration, frame count
-- [x] Per-target envelope editor — `Target` enum dispatches to generator/layer/camera fields via `write_target`. 16 animatable parameters (modular k, hypo d, epi d, Lissajous phi/A/B, phyllotaxis α/k, polygon chord k/rotation, layer rotate/scale/translateX/translateY, camera zoom)
-- [x] "Bake to SVG sequence" — writes numbered SVGs (`name_0000.svg` … `name_NNNN.svg`) to `$XDG_CONFIG_HOME/caustic/animations/`
+- [x] Per-target envelope editor — `Target` enum dispatches to generator/layer/camera fields via `write_target`. **29 animatable parameters** (modular k, hypo d, epi d, Lissajous phi/A/B, phyllotaxis α/k, polygon chord k/rotation, all attractor a/b/c/d × 3, diamond-stack aspect/rotation, layer rotate/scale/translateX/translateY, camera zoom)
+- [x] "Bake to SVG sequence" — writes numbered SVGs (`name_0000.svg` … `name_NNNN.svg`) to `$XDG_CONFIG_HOME/caustic/animations/`. **PNG sequence + optional ffmpeg-mp4 and in-process GIF bake** shipped in v1.1 polish.
 
-**Acceptance:** A modular chord with `k` animated `Linear(2.0 → 3.0)` over 60 frames bakes to 60 SVGs that, when composed, show smooth cardioid → nephroid morph. Verified by `test_envelope.cpp` (12 cases, 114 doctest total).
+**Acceptance:** A modular chord with `k` animated `Linear(2.0 → 3.0)` over 60 frames bakes to 60 SVGs that, when composed, show smooth cardioid → nephroid morph. Verified by `test_envelope.cpp` (18 cases incl. Keyframed coverage).
 
-**Deferred:** `Keyframed` envelope with arbitrary control points (would require a 2D curve-editor widget — separate UX project); preset-borne animation (current `AnimationSpec` lives only in `AppState`, not serialised — adding it would bump the preset schema again).
+**Deferred:** preset-borne animation (current `AnimationSpec` lives only in `AppState`, not serialised — adding it would bump the preset schema again).
 
 ---
 
-## Phase 9 — Parametric curve expansion + hybrid mode + multi-layer scenes *(v1.1)*
+## Phase 9 — Parametric curve expansion + hybrid mode + multi-layer scenes *(complete, 2026-05-18)*
 
 **Goal:** Multi-layer scene infrastructure with per-layer transforms and array tools (the load-bearing dependency for the symmetric, tiled, and radially-arrayed compositions the user's reference images keep returning to), plus four new parametric curves and the hybrid-mode generator.
-**Status:** Not started
+**Status:** Complete (Stage A closed 2026-05-10 with Phase 10; Stage B's new curves and chord-pattern hybrids landed across v1.1 polish 2026-05-11 → 2026-05-18)
 **Deliverables:**
 
 **Scene + transforms + arrays** (foundation — Stage A, complete 2026-05-10):
@@ -173,13 +175,13 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 - [x] Array tools (free functions in `caustic/array_tools.hpp`): `rotational_array(layer, N, center)`, `grid_tile(layer, rows, cols, spacing)`, `mirror_reflect(layer, axis)`. Triggered from UI buttons; "Apply" replaces the selected layer with N concrete derived copies (each independently editable afterward).
 - [x] Both renderers (`SvgRenderer`, `RaylibRenderer`) iterate the scene's layers and apply each layer's transform; SVG emits one `<g>` per layer (Inkscape-friendly). 74 doctest cases (Stage A added 8 array-tool tests + multi-layer SVG tests).
 
-**New curves and hybrid mode** (content — Stage B):
+**New curves and hybrid mode** (content — Stage B, complete across v1.1 polish):
 
-- [ ] `RoseCurve(n, d)` — `r = cos(n·θ/d)` parametric curve
-- [ ] `MaurerRose` — special case of hybrid mode on rose curve
-- [ ] `SuperformulaCurve` (Gielis) — single 6-parameter equation generating stars, flowers, polygons, organic forms
-- [ ] `PhyllotaxisGenerator` — golden-angle point disk; `points` mode (scatter) and `chords` mode (modular rule on the disk)
-- [ ] `HybridGenerator(curve, N, k)` — modular chord rule applied to N samples of any `ParametricCurve` (including the new ones above)
+- [x] `RoseCurve(n, d)` — `r = cos(n·θ/d)` parametric curve
+- [x] `MaurerRose` — landed 2026-05-18 as a concrete generator (`maurer_rose(n, step_deg, samples)`) rather than a hybrid-mode special case; sin(n·θ) sampled at coprime step produces the dense fractal "necklace" texture
+- [x] `SuperformulaCurve` (Gielis) — single 6-parameter equation generating stars, flowers, polygons, organic forms
+- [x] `PhyllotaxisGenerator` — golden-angle point disk; chord mode shipped (scatter-only `points` mode arrived later as part of the attractor scatter tier in v1.1 polish)
+- [x] **Chord-pattern hybrids** chosen over general `HybridGenerator(curve, N, k)` — three concrete chord-set generators ship the user-visible string-art family without the nested-`ParametricCurve` JSON refactor: `LissajousChord`, `SuperformulaChord`, and `MaurerRose`. Plus `PolygonChord` (Phase 10) and `PhyllotaxisChord` cover the polygon and disc cases. General hybrid mode stays out of scope.
 
 **Acceptance:** A scene with a faint epitrochoid background and a Maurer rose foreground exports as a single SVG with two `<g>` layers, both correctly styled. Superformula sweeps through `m` produce smooth polygon → starfish morphs; phyllotaxis at α = 137.508° matches a sunflower seed head. Rotational-array of a single `LinearEnvelope` (Phase 10) at N=6 reproduces the radial star-of-bowties pattern from the reference images with one Apply click instead of six manual layer placements.
 
@@ -199,7 +201,7 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 **Acceptance:** Deltoid envelope renders cleanly from chord-rule-on-triangle at n=3, k=2. Parabolic corner fan with two perpendicular segments at k=1. Four-bowtie 2×2 grid composes 4 `LinearEnvelope` layers, each independently coloured and positioned. RGB triangle composes 3 `LinearEnvelope` layers on the sides of a triangle with R/G/B corner fans. All 6 presets export to SVG without rendering glitches. 102 doctest cases passing (88 → 102: 8 new polygon + 6 new linear-envelope cases); 20 CTest CLI smoke cases (14 → 20).
 
-**Deferred polish:** canvas-drag endpoint editing for `LinearEnvelope` (would be a meaningful UX win but the sliders work fine). Full hybrid mode (`HybridGenerator(curve, N, k)` for modular chord on any `ParametricCurve`) and Maurer rose still deferred from Phase 9 Stage B — `polygon_chord` and `phyllotaxis_chord` are concrete special cases that cover the user-visible string-art family without the nested-generator JSON refactor that general hybrid mode would require.
+**Deferred polish closed in v1.1:** canvas-drag endpoint editing for `LinearEnvelope` shipped 2026-05-18 — the four endpoints render as draggable canvas handles with handle-to-handle snap and grid honoured. General hybrid mode (`HybridGenerator(curve, N, k)`) stays out of scope; `polygon_chord`, `phyllotaxis_chord`, `maurer_rose`, `lissajous_chord`, and `superformula_chord` are the concrete special cases that cover the user-visible string-art family without the nested-generator JSON refactor.
 
 ---
 
@@ -220,7 +222,58 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 **Acceptance:** Clifford with `(a, b, c, d) = (-1.4, 1.6, 1.0, 0.7)` produces the canonical butterfly. De Jong with `(1.4, -2.3, 2.4, -2.1)` produces the dual-wing classic. Tinkerbell with `(0.9, -0.6013, 2.0, 0.5)` from `(-0.72, -0.64)` stays in basin for 20k iterations. 123 doctest cases (114 → 123: +9 attractor cases), 23 CTest CLI smoke cases (20 → 23: +3 attractor presets).
 
-**Deferred polish:** points/scatter geometry tier. Strange attractors are conventionally rendered as one dot per iterate; current pipeline only has `polylines` + `chords` so we connect consecutive iterates. The result is readable as orbital density but has a visible "stroke texture" especially on Clifford/de Jong where consecutive iterates jump across the attractor. Adding `GeometryBuffer.points` (renderers draw each as a 1×1 px / tiny SVG `<circle>`) would give the canonical scatter look and would also be reusable for a future phyllotaxis-points mode. ~150 lines across `geometry_buffer.hpp`, both renderers, and the factory.
+**Deferred polish closed in v1.1:** points/scatter geometry tier shipped 2026-05-18 — new `GeometryBuffer.points` vector parallel to polylines and chords, new `AttractorRenderMode { Polyline, Scatter, Both }` enum on each attractor params struct, raylib renderer draws `DrawCircleV` per point, SVG renderer emits `<circle>` per point. Bundled attractor presets switched to Scatter mode at ~1.5px / opacity 0.45 for the canonical scatter-plot look.
+
+---
+
+## v1.1 polish — generator expansion + UX work *(complete, 2026-05-11 → 2026-05-18)*
+
+**Goal:** Close out v1.1 by filling in the deferred items from Phases 8–11 and reaching feature parity with the reference-image string-art set the user kept showing.
+**Status:** Complete — five sub-batches across seven commits between Phase 11 close (2026-05-11) and the documentation refresh (2026-05-18).
+**Deliverables:**
+
+**Generators 13–17 — string-art expansion:**
+
+- [x] **DiamondStack** (13th) — stacked hourglass / diamond modules with parabolic chord fans at each tip; `DiamondStackFans { Both, Vertical, Horizontal }` enum gives the two-colour stacked-diamond recipe one layer per fan set. Animation targets `aspect` and `rotation` added.
+- [x] **CustomChord** (14th) — hand-authored nail-and-chord layout with a full editor (see below). The escape hatch for patterns the procedural generators can't reach.
+- [x] **MaurerRose** (15th) — sin(n·θ) at coprime angular step; dense fractal necklace.
+- [x] **LissajousChord** (16th) — modular chord rule on N nails sampled around a Lissajous curve.
+- [x] **SuperformulaChord** (17th) — modular chord rule on N nails sampled around a Gielis superformula curve.
+
+**CustomChord editor punch list** (8f7165d):
+
+- [x] Six edit modes: Off, AddNail, AddChord, MoveNail, RecolourChord, Select
+- [x] Mode-independent right-click erases the nail or chord under the cursor (nails take priority)
+- [x] 50-deep snapshot undo/redo (Ctrl+Z / Ctrl+Y), cleared on layer/generator switch
+- [x] Per-chord start/end colour + 16-subsegment gradient rendering
+- [x] AddChord live preview line from the first-clicked nail to the cursor
+- [x] Multi-select with rubber-band, Shift+click toggle, bulk Delete and Recolour
+- [x] Native file dialogs (tinyfiledialogs) for save-anywhere / open-anywhere / export-anywhere
+- [x] Grid + snap (rectangular initially, polar added later in this batch); pin-number toggle; left-click drag pans when edit mode = Off
+
+**Attractor + envelope + bake polish** (bb95c27):
+
+- [x] Points/scatter geometry tier (`GeometryBuffer.points`, `AttractorRenderMode { Polyline, Scatter, Both }`) — closes the Phase 11 deferred
+- [x] LinearEnvelope canvas-drag editor with handle-to-handle snap and undo/redo — closes the Phase 10 deferred
+- [x] `Keyframed` envelope (vector of `(t, value)` keys with linear interpolation) — closes the Phase 8 deferred
+- [x] PNG sequence bake via `RaylibRenderer::write_png`, optional `ffmpeg` mp4 encode after PNG, in-process GIF encoding via single-header `msf_gif`
+
+**Three more chord-pattern generators** (5db9377): MaurerRose, LissajousChord, SuperformulaChord with `test_hybrids.cpp` (6 cases) and three bundled presets — closes the Phase 9 Stage B chord-pattern hybrid item.
+
+**Nice-to-have batch** (dc7f6b1):
+
+- [x] Keyboard shortcuts: `Ctrl+S` / `Ctrl+Shift+S` / `Ctrl+O` / `Ctrl+E` / `Ctrl+Shift+E` / `Ctrl+N` (plus existing 1–4 / F / 0 / F11 / Ctrl+Z/Y / Delete)
+- [x] Polar grid mode with `EditorGridMode { Rectangular, Polar }` and `EditorGrid { mode, spacing, polar_spokes, visible, snap }` persisted in the preset (fixes "new nails won't line up after reload")
+- [x] Per-chord stroke width and opacity overrides (`GeometryBuffer.chord_width_overrides` / `chord_opacity_overrides`; `CustomChordParams.chord_widths` / `chord_opacities`)
+- [x] Preset browser thumbnails (lazy 96×96 `Texture2D` per preset path)
+- [x] Universal pan — middle-click drag, Spacebar+drag, and smart left-drag that hits-tests on press and pans on miss
+
+**Documentation:**
+
+- [x] `MANUAL.md` task-oriented user guide (04699fb)
+- [x] LinearEnvelope preset gallery rework around k=−1 parabolic envelope (2010d66) — `swoop_pair`, `bowtie_hourglass`, all envelope presets rebuilt around the reversed-index pattern
+
+**Acceptance:** 17 generators bundled across three pipeline tiers. 27 bundled presets covering every generator family plus multi-layer compositions. 159 doctest cases + 33 CTest cases passing. Every Phase 8/9/10/11 deferred-polish item closed except general `HybridGenerator` (explicitly out of scope) and preset-borne `AnimationSpec` (would bump the preset schema).
 
 ---
 
@@ -231,7 +284,7 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 **Deliverables:**
 
 - [ ] README screenshots and animated GIFs (parameter sweep demos)
-- [ ] Bundled preset gallery: 20+ curated presets across all generators
+- [x] Bundled preset gallery: 20+ curated presets across all generators (27 shipped in v1.1 polish; the curated-stable-points-per-generator item below is the next refinement)
 - [ ] **License decision finalised** (MIT vs GPL-3.0) and `LICENSE` file committed
 - [ ] Linux native build + Windows build via mingw-w64 cross-compile from the ThinkPad
 - [ ] itch.io page at `darian-frey.itch.io/caustic` with 30-second parameter-sweep GIF
@@ -244,11 +297,13 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ## Nice-to-have polish backlog *(no committed timing)*
 
-Smaller polish items that improve the editing experience without warranting their own phase. Pick off as time allows.
+The original v1.1-era backlog (keyboard shortcuts, polar grid, per-chord stroke, preset thumbnails, universal pan, scatter attractors, LinearEnvelope drag editor, Keyframed envelope, PNG/GIF/mp4 bake) all shipped in the v1.1 polish batch above. What remains:
 
-- **Curated stable-point preset libraries per generator.** Each generator (modular chord, hypotrochoid, epitrochoid, Lissajous, rose, superformula, phyllotaxis, plus future linear-envelope / polygon / strange attractors) has a parameter space dominated by chaotic-looking values with a few "stable" aesthetic islands. Phyllotaxis is the most visible case (drag α off the golden angle and the visual reads as broken), but every generator has analogous sweet spots that a new user has to stumble onto. Bundle 5–10 named presets per generator covering the canonical patterns plus a few well-chosen variants — e.g. cardioid / nephroid / Mathologer-51 for modular chord; classic Spirograph / Tusi-couple / astroid for hypotrochoid; sunflower / pine-cone / 5-spoke / dandelion for phyllotaxis. Snap-buttons in the UI (already added for phyllotaxis α and k) handle the urgent ergonomic case; the curated gallery teaches the parameter space implicitly.
+- **Curated stable-point preset libraries per generator.** Each generator (modular chord, hypotrochoid, epitrochoid, Lissajous, rose, superformula, phyllotaxis, plus linear-envelope / polygon / strange attractors) has a parameter space dominated by chaotic-looking values with a few "stable" aesthetic islands. Phyllotaxis is the most visible case (drag α off the golden angle and the visual reads as broken), but every generator has analogous sweet spots that a new user has to stumble onto. Bundle 5–10 named presets per generator covering the canonical patterns plus a few well-chosen variants — e.g. cardioid / nephroid / Mathologer-51 for modular chord; classic Spirograph / Tusi-couple / astroid for hypotrochoid; sunflower / pine-cone / 5-spoke / dandelion for phyllotaxis. Snap-buttons in the UI (already added for phyllotaxis α and k) handle the urgent ergonomic case; the curated gallery teaches the parameter space implicitly. 27 presets ship today — call it ~60% of the target gallery.
 - Snap-button rows under the most chaotic sliders for the other generators if and when they prove to need them (Lissajous φ, superformula `m`, modular chord `k` integer special cases).
 - Stable-region indicator on continuous sliders — compute a "packing quality" metric over parameter space and draw a marker bar under the slider showing where local maxima live. Would auto-surface stable points without curation. Tried and rejected for now as over-engineered relative to snap buttons + curated presets.
+- Preset-borne animation — serialise `AnimationSpec` into the preset so a saved scene can replay its animation on load. Carried over from Phase 8 deferred; would bump the preset schema to v3.
+- General `HybridGenerator(curve, N, k)` with nested-`ParametricCurve` JSON encoding. Currently out of scope — `MaurerRose`, `LissajousChord`, `SuperformulaChord`, `PolygonChord`, `PhyllotaxisChord` cover the user-visible chord-pattern family as concrete special cases.
 
 ---
 

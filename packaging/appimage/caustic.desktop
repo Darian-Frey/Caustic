@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Caustic
+GenericName=Generative Geometric Art Studio
+Comment=Chord patterns, roulette curves, parametric envelopes, and strange attractors with SVG export
+Exec=caustic %F
+Icon=caustic
+Terminal=false
+Categories=Graphics;2DGraphics;VectorGraphics;
+Keywords=art;generative;svg;spirograph;string art;cardioid;attractor;envelope;
+StartupNotify=true
+MimeType=application/json;

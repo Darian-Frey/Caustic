@@ -387,6 +387,7 @@ bool color_edit_double(const char* label, caustic::Color* c) {
 
 std::vector<fs::path> list_presets(const fs::path& dir) {
     std::vector<fs::path> out;
+    if (dir.empty()) return out;
     std::error_code ec;
     if (!fs::exists(dir, ec)) return out;
     for (const auto& entry : fs::directory_iterator(dir, ec)) {
@@ -398,8 +399,37 @@ std::vector<fs::path> list_presets(const fs::path& dir) {
     return out;
 }
 
+// Resolve the directory the running binary lives in, via /proc/self/exe.
+// Returns an empty path on non-Linux systems or on read failure — callers
+// must tolerate that.
+fs::path executable_dir() {
+    std::error_code ec;
+    const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+    if (ec || exe.empty()) return {};
+    return exe.parent_path();
+}
+
+// Find the bundled-presets directory. Tries, in order:
+//   1. ./presets   — repo-root dev workflow (`./build/app/caustic` from repo root)
+//   2. <exe>/../share/caustic/presets — standard install / AppImage layout
+//   3. <exe>/presets                  — portable side-by-side layout
+// Returns the first directory that exists, or an empty path if none does.
+fs::path find_bundled_preset_dir() {
+    std::error_code ec;
+    const fs::path cwd_presets = "presets";
+    if (fs::is_directory(cwd_presets, ec)) return cwd_presets;
+    const fs::path exe_dir = executable_dir();
+    if (!exe_dir.empty()) {
+        const fs::path share = exe_dir / ".." / "share" / "caustic" / "presets";
+        if (fs::is_directory(share, ec)) return fs::weakly_canonical(share, ec);
+        const fs::path alt = exe_dir / "presets";
+        if (fs::is_directory(alt, ec)) return alt;
+    }
+    return {};
+}
+
 void refresh_preset_lists(AppState& state) {
-    state.bundled_presets = list_presets("presets");
+    state.bundled_presets = list_presets(find_bundled_preset_dir());
     state.user_presets = list_presets(caustic::user_preset_dir());
 }
 

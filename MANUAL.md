@@ -1,7 +1,7 @@
 # Caustic — User Manual
 
-> **Status:** v1.1 — covers all features through Phase 11
-> **Last reviewed:** 2026-05-11
+> **Status:** v1.1 — covers all features through Phase 11 + v1.1 polish
+> **Last reviewed:** 2026-05-18
 
 A practical guide to driving Caustic — what each control does, what each generator produces, and how to compose common string-art patterns.
 
@@ -9,13 +9,17 @@ A practical guide to driving Caustic — what each control does, what each gener
 
 - [Starting the app](#starting-the-app)
 - [The interface](#the-interface)
-- [The 12 generators](#the-12-generators)
+- [The 17 generators](#the-17-generators)
+- [The CustomChord nail editor](#the-customchord-nail-editor)
+- [The LinearEnvelope drag editor](#the-linearenvelope-drag-editor)
 - [Style](#style)
 - [Camera & canvas](#camera--canvas)
+- [Keyboard shortcuts](#keyboard-shortcuts)
 - [Layers & composition](#layers--composition)
 - [Presets](#presets)
-- [SVG export](#svg-export)
+- [Exporting](#exporting)
 - [Animation](#animation)
+- [Frame bake (video)](#frame-bake-video)
 - [Headless CLI](#headless-cli)
 - [Recipes](#recipes)
 - [Common pitfalls](#common-pitfalls)
@@ -32,9 +36,9 @@ A practical guide to driving Caustic — what each control does, what each gener
 
 First-time files are written under `$XDG_CONFIG_HOME/caustic/` (or `$HOME/.config/caustic/`):
 
-- `presets/` — your saved scenes
+- `presets/` — your saved scenes (default location only; native file dialogs let you save anywhere)
 - `exports/` — exported SVGs
-- `animations/` — baked SVG frame sequences
+- `animations/` — baked SVG / PNG / GIF / mp4 sequences
 
 ## The interface
 
@@ -45,14 +49,14 @@ Five panels around a central canvas:
 | **Parameters** (top-left) | Pick a generator and tune its numbers |
 | **Style** (bottom-left) | Colour map, stroke, opacity, background |
 | **Layers** (top-right) | Add/remove/reorder layers; per-layer transform; array tools |
-| **Presets** (right) | Save, load bundled or user presets, export SVG |
-| **Animation** (bottom-right) | Envelope target + bake SVG sequence |
+| **Presets** (right) | Save, load bundled or user presets, export SVG; thumbnail browser |
+| **Animation** (bottom-right) | Envelope target + bake SVG / PNG / GIF / mp4 |
 
-Every parameter slider supports **Ctrl+click to type an exact value**, **scroll-wheel on hover to step**, **Shift = ×10 step**, **Ctrl = ×0.1 step**. Slider hovering over the canvas zooms instead.
+Every parameter slider supports **Ctrl+click to type an exact value**, **scroll-wheel on hover to step**, **Shift = ×10 step**, **Ctrl = ×0.1 step**. Scroll-wheel over the canvas zooms instead.
 
 Each panel has a **Reset** button to return to its struct defaults — useful for escaping a chaotic corner of parameter space.
 
-## The 12 generators
+## The 17 generators
 
 Three families. Switch with the **Generator** combo at the top of the Parameters panel, or with keys `1`–`4` (modular chord / hypotrochoid / epitrochoid / Lissajous).
 
@@ -79,7 +83,7 @@ Pairs of points joined by straight lines. The "look" emerges as the optical enve
 - Off-golden values produce visually chaotic patterns — most parameter space here is noise.
 - **Snap buttons** for `α` (golden, 2π/3, 2π/5, 2π/7, π/2) and `k` (2, 3, 5, 7, 11) jump to the aesthetic sweet spots.
 
-**Linear envelope** — Two line segments A and B with N points each; connect A[i] to B[round(k·i) mod N]. This is the classical "thread and nails" pattern.
+**Linear envelope** — Two line segments A and B with N points each; connect A[i] to B[round(k·i) mod N]. This is the classical "thread and nails" pattern. **Endpoints are draggable on the canvas** — see [the LinearEnvelope drag editor](#the-linearenvelope-drag-editor).
 
 The chord rule (`k`) determines the visual character — this is the single most important parameter in Caustic:
 
@@ -91,6 +95,22 @@ The chord rule (`k`) determines the visual character — this is the single most
 | `+1` | parallel | Trapezoidal sweep |
 
 **For the iconic curved string-art look, use `k = −1` with shared apex.** All the bundled LinearEnvelope presets use this.
+
+**Lissajous chord** — modular chord rule on N nails sampled around a Lissajous curve. `A`, `B` continuous; `a`, `b` integer for closure (same caveat as plain Lissajous).
+
+**Superformula chord** — modular chord rule on N nails sampled around a Gielis superformula curve. Starfish, sea-anemone, and spiked-rosette patterns.
+
+**Diamond stack** — stacked hourglass/diamond modules with parabolic chord fans at each tip. Controls:
+
+- `modules` — how many diamonds stack vertically (adjacent diamonds share a tip)
+- `N` — strings per fan
+- `aspect` — `half_waist / half_module_height`
+- `rotation` — radians
+- `fans` — **Both** (4 fans per module, the default), **Vertical only** (top + bottom apexes — fills the top/bottom triangles), **Horizontal only** (left + right apexes — fills the left/right triangles)
+
+The Vertical/Horizontal split is the standard recipe for two-colour stacked-diamond compositions: one layer per fan set, each independently styled.
+
+**Custom chord** — hand-authored nail-and-chord layout. Place nails by clicking the canvas, connect any two with a chord. See [the CustomChord nail editor](#the-customchord-nail-editor).
 
 ### Parametric curves
 
@@ -108,13 +128,19 @@ Closed-form `t → (x, y)` sampled to a polyline.
 - `n = 7`, `d = 3` → 7-petal asymmetric rose
 - `n = 2`, `d = 1` → quadrifolium
 
+**Maurer rose** — sin(n·θ) sampled at coprime angular step `step_deg`. With samples=360 and step=71 the polyline shuffles through every sample and produces a dense fractal "necklace" pattern over the rose curve.
+
 **Superformula (Gielis)** — 6-parameter (`m`, `n1`, `n2`, `n3`, `a`, `b`) generator that morphs between polygons, stars, and organic shapes. Sweep `m` for polygon → starfish.
 
 ### Iterative orbits
 
-`(x_n, y_n) → (x_{n+1}, y_{n+1})` traced as a polyline. The orbit's invariant measure is what you see.
+`(x_n, y_n) → (x_{n+1}, y_{n+1})` rendered as polyline, scatter, or both. The orbit's invariant measure is what you see.
 
-Common controls: `a, b, c, d` (map coefficients), `x0, y0` (initial point), `iterations`, `burn_in` (discarded transient).
+Common controls: `a, b, c, d` (map coefficients), `x0, y0` (initial point), `iterations`, `burn_in` (discarded transient), **`render mode`** (Polyline / Scatter / Both).
+
+- **Polyline** — consecutive iterates connected by line segments. Reads as a continuous trajectory; introduces a stroke texture.
+- **Scatter** — one dot per iterate. Canonical strange-attractor look — pure density map.
+- **Both** — overlay scatter on top of polyline for emphasis.
 
 **Clifford** — `(sin(a·y) + c·cos(a·x), sin(b·x) + d·cos(b·y))`. Canonical: `(-1.4, 1.6, 1.0, 0.7)`.
 
@@ -122,9 +148,70 @@ Common controls: `a, b, c, d` (map coefficients), `x0, y0` (initial point), `ite
 
 **Tinkerbell** — `(x² − y² + a·x + b·y, 2·x·y + c·x + d·y)`. Canonical: `(0.9, −0.6013, 2.0, 0.5)` from `(−0.72, −0.64)`. Easily diverges if you leave the canonical basin — the orbit then truncates and the UI shows a warning.
 
+## The CustomChord nail editor
+
+For hand-authored patterns the procedural generators can't reach. Six edit modes plus three universal interactions (right-click erase, undo/redo, multi-select).
+
+### Edit modes
+
+Pick a mode from the radio buttons in the Parameters panel.
+
+| Mode | Left-click |
+|---|---|
+| **off** | (no edit action — left-click pans the canvas) |
+| **add nail** | Drop a nail at the world coord under the cursor |
+| **add chord** | First click selects a nail, second click on a different nail emits a chord. The new chord adopts the active start/end colours (and width/opacity if overrides are in play) |
+| **move nail** | Click + hold on an existing nail, drag to reposition (snap honoured) |
+| **recolour chord** | Click on an existing chord to apply the active start/end colours |
+| **select** | Click an item to select it (Shift+click toggles / adds). Drag in empty space → rubber-band area select. **Delete** key removes the selection |
+
+### Universal interactions
+
+- **Right-click** — erase the nail or chord under the cursor. Works in every mode (including Off). Nails take priority over chords when both are in range.
+- **Ctrl+Z / Ctrl+Y** — undo/redo (50-deep stack). Every edit pushes a snapshot. History clears when you switch layers or generators.
+- **Delete** — remove all selected items at once.
+
+### Per-chord colour, width, opacity
+
+The CustomChord layer has optional per-chord override arrays. When non-empty AND the size matches `chords.size()`, each entry replaces the layer-style sample for that chord.
+
+- **Active start / end colour** — colour pickers in the panel. Each new chord placed in *add chord* mode picks up these values. Start = end → solid colour. Different start/end → renderer draws a gradient along the chord.
+- **Active width / opacity** — width and opacity sliders. Same rule: new chords adopt the active values.
+- **Recolour all** / **Apply width to all** / **Apply opacity to all** — paint every existing chord with the current active values.
+- **Recolour selected** — paint only the multi-selected chords.
+- **Clear chord colours / widths / opacities** — drop the override arrays so the layer's style colormap and stroke take over again.
+
+### Grid and snap
+
+Toggle **show grid** to draw a faint overlay on the canvas. Toggle **snap to grid** to round newly-placed and moved nails to grid intersections.
+
+- **Grid mode** — Rectangular (axis-aligned lines) or **Polar** (concentric rings + radial spokes from origin)
+- **Grid spacing** — world units between rectangular lines / polar rings
+- **Polar spokes** — number of equally-spaced rays (polar mode only)
+- **Show pin numbers** — toggle the index label drawn above each nail
+
+The grid state (mode, spacing, polar spokes, visible, snap) **is saved with the preset** — so a CustomChord layer built against a specific grid keeps that grid when reloaded, and new nails snap to the same intersections.
+
+### Other panel buttons
+
+- **Delete last nail** / **Delete last chord** — quick undo without entering Select mode
+- **Clear all** — wipe nails + chords (undoable)
+
+## The LinearEnvelope drag editor
+
+When the current layer is LinearEnvelope, the four endpoints (`a0`, `a1`, `b0`, `b1`) appear as draggable handles on the canvas. Click and drag to reposition.
+
+**Handle-to-handle snap** — drag a handle near another handle and the target gets a yellow ring; releasing snaps the dragged handle to the target's exact position. This lets you rejoin a split apex (e.g. corner_fan's `a_start` and `b_start`) without pixel-hunting.
+
+**Grid + snap** — same grid state as the CustomChord editor (rectangular or polar; persisted with the preset). The drag honours snap-to-grid the moment you start moving.
+
+**Undo/redo** — Ctrl+Z / Ctrl+Y. Every endpoint drag pushes one snapshot. History clears on layer/generator switch.
+
+Pan still works in this mode: middle-click drag, Spacebar+drag, or left-click drag on empty space (away from any handle).
+
 ## Style
 
-The Style panel applies to whatever layer is selected in the Layers panel. Each chord or polyline segment is coloured by sampling the **colour map** at an **indexer t ∈ [0, 1]**.
+The Style panel applies to whatever layer is selected in the Layers panel. Each chord, polyline segment, or scatter point is coloured by sampling the **colour map** at an **indexer t ∈ [0, 1]**.
 
 **Indexers** — what `t` means for a primitive:
 
@@ -140,7 +227,7 @@ The Style panel applies to whatever layer is selected in the Layers panel. Each 
 - `HSV sweep` — hue range with fixed saturation/value
 - `diverging` — negative, midpoint, positive (good for chord-length-indexed)
 
-**Stroke** — independent min/max widths interpolated by the **width indexer**. Set min = max for uniform thickness.
+**Stroke** — independent min/max widths interpolated by the **width indexer**. Set min = max for uniform thickness. For attractors in Scatter mode, the dot radius derives from `stroke.width_min`.
 
 **Opacity** — 0–1, applied per segment. For dense chord sets, drop to 0.3–0.6 so overlaps build up naturally.
 
@@ -148,14 +235,47 @@ The Style panel applies to whatever layer is selected in the Layers panel. Each 
 
 **cyclic** — for closed curves (rose, Lissajous, modular chord), remaps `t` with a triangle wave so the colour returns to its start at `t = 1`. Hides the seam where the curve wraps around.
 
+**Note**: CustomChord per-chord overrides (colour / width / opacity) take precedence over the layer-level Style for chords that have an override set. Style still drives any non-overridden chords plus all polylines and scatter points.
+
 ## Camera & canvas
 
-- **Middle-click drag** → pan
+Pan modes — choose whichever feels best for your input device:
+
+- **Middle-click drag** → always pans (every generator and edit mode)
+- **Spacebar + left-drag** → universal pan (works inside the CustomChord and LinearEnvelope editors too — the escape hatch when left-click is doing something else)
+- **Plain left-drag**:
+  - On most generators → pans
+  - On LinearEnvelope → drags the handle under the cursor; pans if the click missed all 4 handles
+  - In CustomChord *add chord* / *move nail* / *recolour chord* → does the mode action when on a target, pans on empty space
+  - In CustomChord *add nail* / *select* → places a nail / starts rubber-band; use Spacebar+drag or middle-click drag to pan
+
+Other:
+
 - **Scroll wheel** on canvas → zoom (cursor-relative)
 - **F** or **0** → reset camera
 - **F11** → toggle borderless fullscreen
 
 The window is resizable down to 640×400; the offscreen render target reallocates to match, so the figure stays sharp at any size.
+
+## Keyboard shortcuts
+
+| Keys | Action |
+|---|---|
+| `Ctrl+S` | Save preset (quick — to `$XDG_CONFIG_HOME/caustic/presets/` using the Save-name field) |
+| `Ctrl+Shift+S` | Save preset as… (native file dialog) |
+| `Ctrl+O` | Open preset (native file dialog) |
+| `Ctrl+E` | Export SVG (quick — to `$XDG_CONFIG_HOME/caustic/exports/` using the export-name field) |
+| `Ctrl+Shift+E` | Export SVG as… (native file dialog) |
+| `Ctrl+N` | New preset (resets to defaults) |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo (active in CustomChord and LinearEnvelope editors) |
+| `Ctrl+Shift+Z` | Redo (alternate) |
+| `1` / `2` / `3` / `4` | Quick-switch to ModularChord / Hypotrochoid / Epitrochoid / Lissajous |
+| `F` or `0` | Reset camera |
+| `F11` | Toggle borderless fullscreen |
+| `Delete` | Remove selected nails + chords (CustomChord Select mode) |
+| `Spacebar` (held) + drag | Universal pan |
+
+Shortcuts are suppressed when an ImGui text field has focus (so you can type "S" into a filename).
 
 ## Layers & composition
 
@@ -182,45 +302,57 @@ These are the right tool for symmetric compositions. Far easier than placing N c
 
 ## Presets
 
-Caustic ships with 17 bundled presets covering every generator and several multi-layer compositions. They're listed in the **Bundled** section of the Presets panel.
+Caustic ships with **27 bundled presets** covering every generator and several multi-layer compositions. They're listed in the **Bundled** section of the Presets panel, each with a 96×96 thumbnail preview rendered lazily on first display.
 
-**To save your work** — type a name in the "Save" field and click **Save**. The preset is written to `$XDG_CONFIG_HOME/caustic/presets/` as a JSON file. **User** presets appear in the panel below the Bundled list; the **Refresh** button rescans the directory.
+**Quick save** — type a name in the "Save" field and click **Save** (or `Ctrl+S`). The preset is written to `$XDG_CONFIG_HOME/caustic/presets/` as a JSON file. **User** presets appear in the panel below the Bundled list; the **Refresh** button rescans the directory.
+
+**Save as…** — opens a native file dialog so you can save to any location on disk. Same dialog appears for **Open…** (`Ctrl+O`) and **Export as…** (`Ctrl+Shift+E`).
+
+**New** — `Ctrl+N` or the **New** button resets to a default single-layer preset.
+
+**What's persisted**:
+
+- Scene background + every layer (generator + style + transform + visibility)
+- Camera state (pan in screen pixels + zoom)
+- Editor grid (mode, spacing, polar spokes, visible, snap) — so CustomChord/LinearEnvelope work resumes exactly as you left it
 
 **Preset format** — versioned JSON (current schema is v2). v1 presets auto-promote on load. See [SPEC.md §3](SPEC.md) for the schema.
 
-## SVG export
+## Exporting
 
-Click **Export SVG** in the Presets panel. Output goes to `$XDG_CONFIG_HOME/caustic/exports/`.
+### SVG
+
+Click **Export SVG** in the Presets panel (or `Ctrl+E`). Output goes to `$XDG_CONFIG_HOME/caustic/exports/` using the export-name field. **Export as…** (`Ctrl+Shift+E`) opens a native file dialog.
 
 Two modes:
 
-- **Coloured** (default) — preserves your style. One `<line>` per chord segment, one `<line>` per polyline segment. Inkscape opens it cleanly.
+- **Coloured** (default) — preserves your style. One `<line>` per chord segment, one `<line>` per polyline segment, one `<circle>` per scatter point. Inkscape opens it cleanly.
 - **Plotter mode** (toggle the checkbox) — strips opacity and stroke variation, emits a single colour (default `#000000`), and sorts chord-set chords lexicographically by start point so a pen plotter can travel between them more efficiently. Polylines emit as a single `<polyline>` (one pen-down per curve).
 
 Output is **deterministic** — the same preset produces a byte-identical SVG every time.
 
 ## Animation
 
-Animate any single parameter over time and bake to a numbered SVG sequence (compose with FFmpeg etc. for video).
+Animate any single parameter over time and bake to a numbered frame sequence or video.
 
-**Target** — what to animate. 28 options: generator coefficients (modular k, hypo d, epi d, Lissajous phi/A/B, phyllotaxis α/k, polygon k/rotation, all attractor a/b/c/d), per-layer transform (rotate, scale, translate x/y), camera zoom.
+**Target** — what to animate. **29 options**: generator coefficients (modular `k`, hypo `d`, epi `d`, Lissajous `phi/A/B`, phyllotaxis `α/k`, polygon `k`/rotation, all attractor `a/b/c/d` × 3, diamond-stack `aspect`/rotation), per-layer transform (rotate, scale, translate x/y), camera zoom.
 
 **Envelope** — how the value changes over `t ∈ [0, 1]`:
 
 - `Static` — constant
 - `Linear` — `v0` at t=0 → `v1` at t=1
 - `Sine` — `offset + amplitude · sin(2π · frequency · t + phase)`
+- `Keyframed` — arbitrary `(t, value)` control points with linear interpolation between them. Add / remove rows from the table; values outside the first/last key clamp to the edges
 
 **Playback** — Play / Pause toggles live animation. The time slider scrubs (pauses playback when dragged). Duration sets how long one full sweep takes.
 
-**Bake SVG sequence** — sets the frame count, name prefix, and writes `name_0000.svg`, `name_0001.svg`, … to `$XDG_CONFIG_HOME/caustic/animations/`. Compose offline with FFmpeg:
+## Frame bake (video)
 
-```bash
-ffmpeg -framerate 30 -i animation_%04d.svg out.mp4   # if your ffmpeg has SVG
-# or rasterise first:
-for f in animation_*.svg; do rsvg-convert "$f" -o "${f%.svg}.png"; done
-ffmpeg -framerate 30 -i animation_%04d.png out.mp4
-```
+The Animation panel has three bake outputs. All write into `$XDG_CONFIG_HOME/caustic/animations/<name>/`.
+
+- **Bake SVG sequence** — writes `name_0000.svg`, `name_0001.svg`, … Compose offline with FFmpeg (rasterise first via `rsvg-convert`, then encode).
+- **Bake PNG sequence** — writes PNG frames using the live raylib render path. Honours the current canvas size. If **encode mp4 after PNG** is checked, Caustic will spawn `ffmpeg` (must be on `PATH`) and emit `name.mp4` with the H.264 yuv420p baseline that plays anywhere.
+- **Bake GIF** — encodes a GIF in-process via `msf_gif` (no external tools). Frame interval and bit depth honour the panel sliders.
 
 The acceptance demo: modular chord with `k` animated `Linear(2 → 3)` over 60 frames produces a smooth cardioid → nephroid morph.
 
@@ -240,7 +372,7 @@ Flags:
 | `--width N` | `1024` | Output canvas width |
 | `--height N` | `1024` | Output canvas height |
 | `--margin F` | `0.05` | Fraction of canvas reserved as margin |
-| `--plotter` | off | Plotter-mode export (see [SVG export](#svg-export)) |
+| `--plotter` | off | Plotter-mode export (see [Exporting](#exporting)) |
 | `--simplify E` | off | Douglas-Peucker epsilon (parsed; not yet applied) |
 
 Exit codes: `0` success / `1` bad args / `2` preset file not found / `3` preset failed validation / `4` write failed.
@@ -279,6 +411,18 @@ Four parabolic corner fans with apexes at the diamond's four outer tips, each fa
 
 **Build it interactively**: drop a single corner fan, then click **Rotational array** with `N = 4` in the Layers panel. Four rotated layers appear in one click.
 
+### Two-colour diamond stack
+
+Use two **DiamondStack** layers stacked at the same modules/N/aspect, one with `fans = Vertical only` and the other with `fans = Horizontal only`. Style each in its own colour (classic recipe: white verticals + red horizontals).
+
+Preset: `diamond_stack_two_colour.json`.
+
+### Neon star (4-fold rotational diamond stack)
+
+A DiamondStack layer + **Rotational array N = 4** in the Layers panel.
+
+Preset: `diamond_star_neon.json`.
+
 ### Hexagram / 6-petal star of fans
 
 Six parabolic corner fans, each at a hexagon vertex.
@@ -299,7 +443,7 @@ Preset: `spirograph_classic.json`.
 
 ### Strange attractor portrait
 
-Pick Clifford / de Jong / Tinkerbell. Hit the **Reset generator params** button to get the canonical values. Set Style to **HSV sweep** with **Color indexer = curve t** for chronological colouring (orbit start → orbit end). Drop stroke to ~0.15 and opacity to ~0.1 so the orbit reads as a density map rather than a filled blob.
+Pick Clifford / de Jong / Tinkerbell. Hit the **Reset generator params** button to get the canonical values. Set **render mode = Scatter** for the canonical density look (Polyline is fine but adds stroke texture). Set Style to **HSV sweep** with **Color indexer = curve t** for chronological colouring (orbit start → orbit end). Stroke width ~1.5px and opacity ~0.45 give a clean scatter; for Polyline mode, drop stroke to ~0.15 and opacity to ~0.1 so the orbit reads as a density map rather than a filled blob.
 
 Presets: `clifford_butterfly.json`, `de_jong_classic.json`, `tinkerbell.json`.
 
@@ -309,6 +453,23 @@ Presets: `clifford_butterfly.json`, `de_jong_classic.json`, `tinkerbell.json`.
 
 Preset: `phyllotaxis_sunflower.json`.
 
+### Maurer rose
+
+`MaurerRose`. Try `n = 7`, `step_deg = 71`, `samples = 360`. The "necklace" texture comes from the coprime relationship between `step_deg` and 360.
+
+Preset: `maurer_rose_classic.json`.
+
+### Custom hand-authored pattern
+
+1. Pick `CustomChord` as the generator.
+2. Turn on **show grid** and **snap to grid** (try Polar mode with 12 spokes and spacing 0.1).
+3. Switch to **add nail** mode and click on grid intersections to lay down nails.
+4. Switch to **add chord** mode and connect them. Pick start/end colours in the panel — start = end is a solid colour; different colours produce a gradient along the chord.
+5. Use Ctrl+Z if you misclick; **move nail** mode to reposition existing nails; **right-click** to erase.
+6. Save the preset — the grid settings round-trip, so when you reopen it the nails still align.
+
+Preset: `custom_starburst.json`.
+
 ## Common pitfalls
 
 - **LinearEnvelope with `k = 1`** produces parallel chord lines, not a curved parabola. For the classic curved string-art look, use **`k = −1` with shared apex**.
@@ -316,8 +477,11 @@ Preset: `phyllotaxis_sunflower.json`.
 - **Hypotrochoid non-integer R/r** — the curve won't close cleanly. R and r sliders are integer-only by design.
 - **Lissajous non-integer a/b** — same closure issue. The "drag through irrational a/b to watch precession" demo is unavailable until a sample-over-many-revolutions mode is added.
 - **Tinkerbell diverged** — the orbit escaped its basin. Reduce iterations or stay near the canonical parameters; the parameter panel shows a hint.
-- **Attractor too "muddy"** — drop stroke width to 0.15–0.2 and opacity to 0.1, raise iterations to 80k+. Attractors read better as density than as solid fills.
+- **Attractor too "muddy"** — switch to Scatter render mode, drop stroke width to 0.15–0.5 and opacity to 0.1–0.45, raise iterations to 80k+.
 - **Modular chord at k = 1** — every chord is zero-length (point connects to itself). Try k = 2.
+- **CustomChord nails won't line up after reload** — the editor grid round-trips with the preset, but only if you saved it after configuring the grid. Re-save the preset with the grid configured and reopen.
+- **Left-click pans when I want to edit in CustomChord** — make sure the edit mode is not Off. In edit modes, left-click on a target does the edit action; left-click on empty space pans. Use Spacebar+drag if you want to pan inside an edit mode that consumes empty-space clicks (AddNail / Select).
+- **mp4 bake produced no file** — check that `ffmpeg` is on your `PATH`. The PNG sequence still wrote correctly; you can encode it yourself.
 - **Exit segfault** — fixed in v1.1; if it returns, check [BUGS.md](BUGS.md) for the renderer-destructor-after-CloseWindow issue.
 
 ## Resources
