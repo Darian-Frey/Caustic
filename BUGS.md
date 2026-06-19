@@ -6,6 +6,48 @@ The goal is to keep this file useful when something breaks unexpectedly — sear
 
 ---
 
+## 2026-05-18 — Sidebar hint text disappears past the right edge of the panel
+
+**Symptom:** After the layout refactor to 320 px-wide sidebars, the `TextDisabled` hint blocks in the CustomChord and Parameters panels (e.g. "add nail: left-click on canvas drops a nail", "scroll wheel on slider: ± step  Shift: ×10  Ctrl: ×0.1", "keys 1-4: switch generator  F or 0: reset camera") got chopped at the panel edge — only the leading portion was visible. A couple of long button labels ("Clear chord colours (use style colormap)") and checkbox labels ("plotter mode (single colour, no opacity, sorted)") were similarly clipped.
+
+**Root cause:** ImGui's `Text`/`TextDisabled`/etc. render at the widget's natural width by default — they do **not** word-wrap unless you push a `TextWrapPos`. The previous floating-window layout had been wide enough that no one noticed. Buttons and checkbox labels are worse: they always clip rather than wrap, with no equivalent push to make them wrap.
+
+**Fix:** Push `ImGui::PushTextWrapPos(0.0f)` (the literal value 0 means "wrap at the end of the current window") immediately after `ImGui::Begin` in `render_left_sidebar` / `render_right_sidebar`; pop before `ImGui::End`. That covers every `Text*` call inside any tab. Two helpers `push_panel_wrap` / `pop_panel_wrap` document the intent. For the labels that don't wrap (buttons, checkboxes) the fix is to shorten the string or split into checkbox + companion `TextDisabled` on the same line via `ImGui::SameLine`; that disabled-text portion then wraps cleanly. Rule of thumb that came out of this: design sidebar content to fit the **default 320 px width**; if a label can't, consider whether the explanation belongs as a tooltip instead.
+
+**Files:** `app/main.cpp`.
+
+**Phase:** v1.1 polish.
+
+---
+
+## 2026-05-18 — AppImage launches but bundled presets are missing
+
+**Symptom:** Inside a packaged AppImage, the Presets panel's "Bundled" section was empty even though `presets/*.json` sat at `Caustic.AppDir/usr/share/caustic/presets/`. User presets (under `$XDG_CONFIG_HOME/caustic/presets/`) showed up fine.
+
+**Root cause:** `refresh_preset_lists` called `list_presets("presets")` — a path relative to the **current working directory**. From a development tree the cwd is the repo root and `./presets/` resolves correctly. From an AppImage the cwd is wherever the user double-clicked (typically `~` or `~/Downloads`), where no `./presets/` exists.
+
+**Fix:** Add an `executable_dir()` helper that resolves `/proc/self/exe` (Linux-only path; falls back to an empty path on read failure or other platforms) and a `find_bundled_preset_dir()` that tries the candidates in order: `./presets` (dev convenience), `<exe>/../share/caustic/presets` (the AppImage / standard install layout), `<exe>/presets` (portable side-by-side). Returns the first that exists. `list_presets` already tolerates an empty path so the chain degrades gracefully. The AppImage's `build-appimage.sh` installs to `usr/share/caustic/presets`, so this lookup finds them on every AppImage launch. The same pattern works for future system installs.
+
+**Files:** `app/main.cpp`, `packaging/appimage/build-appimage.sh`.
+
+**Phase:** Phase 12 (release work, AppImage packaging skeleton).
+
+---
+
+## 2026-05-18 — CustomChord nails won't align with the grid after reloading a preset
+
+**Symptom:** Build a CustomChord layer against `snap_to_grid` with `spacing = 0.05`, save the preset, reopen it later — the original nails were still there at their saved positions, but new nails snapped to a different grid (`spacing = 0.1`, the default) and wouldn't align with the saved set. Reproducible across every CustomChord save/load.
+
+**Root cause:** The editor's grid state (`nail_grid_mode`, `nail_grid_spacing`, `nail_grid_polar_spokes`, plus the visible/snap toggles) lived only on `AppState` — pure UI state, never serialised. Loading a preset replaced `state.preset` but left those AppState fields at their compile-time defaults, so any nails authored against a non-default grid couldn't be extended afterward.
+
+**Fix:** Move the grid state into the preset itself. New `caustic::EditorGridMode { Rectangular, Polar }` enum and `caustic::EditorGrid { mode, spacing, polar_spokes, visible, snap }` struct in `core/include/caustic/preset.hpp`, attached to `Preset` as `editor_grid`. New `editor_grid` JSON block in `preset_io.hpp` with default-fallback for older bundled presets that don't have it. UI rewired to read/write `state.preset.editor_grid.*` directly (no AppState mirror), so the source of truth is one place and save/load round-trips it for free. Added doctest coverage for the round-trip and the legacy-preset fallback.
+
+**Files:** `core/include/caustic/preset.hpp`, `core/include/caustic/preset_io.hpp`, `app/main.cpp`, `tests/test_preset_io.cpp`.
+
+**Phase:** v1.1 polish (nice-to-have batch).
+
+---
+
 ## 2026-05-10 — Segfault on app exit after `Window closed successfully`
 
 **Symptom:** `./build/app/caustic` ran fine, but on close raylib's log ended with `INFO: Window closed successfully` followed by `Segmentation fault (core dumped)`. No segfault inside the main loop.
