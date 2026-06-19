@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <numbers>
+#include <random>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -22,6 +23,7 @@
 #include <caustic/geometry_factory.hpp>
 #include <caustic/preset.hpp>
 #include <caustic/preset_io.hpp>
+#include <caustic/randomize.hpp>
 #include <caustic/scene_render.hpp>
 #include <caustic/style.hpp>
 #include <caustic/style_factory.hpp>
@@ -692,6 +694,29 @@ void render_param_panel_content(AppState& state) {
     if (ImGui::Combo("Generator", &gen_idx, kGeneratorNames, IM_ARRAYSIZE(kGeneratorNames))) {
         p.generator.type = static_cast<caustic::GeneratorType>(gen_idx);
         state.dirty = true;
+    }
+
+    // "Surprise me" — roll a fresh parameter set from the active generator's
+    // aesthetic-island stable region (see core/include/caustic/randomize.hpp
+    // for the per-generator anchor lists). Greyed out for CustomChord since
+    // its layout is user-authored and we won't silently wipe it.
+    {
+        const bool randomizable =
+            caustic::generator_is_randomizable(p.generator.type);
+        ImGui::BeginDisabled(!randomizable);
+        if (ImGui::Button("Surprise me")) {
+            // Seeded once from random_device the first time the button fires,
+            // then evolves so consecutive clicks give different results. Static
+            // so the seed survives between render passes.
+            static std::mt19937 rng{std::random_device{}()};
+            caustic::randomize_generator(p.generator, rng);
+            state.dirty = true;
+        }
+        ImGui::EndDisabled();
+        if (!randomizable) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(disabled — custom layout is hand-authored)");
+        }
     }
 
     ImGui::Separator();

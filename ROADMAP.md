@@ -295,6 +295,24 @@ Ordering is firm but not absolute: dependencies between phases (especially Phase
 
 ---
 
+## Phase 13 — v1.2 competitive feature expansion *(in progress, started 2026-06-19; 1/5 deliverables shipped)*
+
+**Goal:** Close the most actionable feature gaps surfaced by the 2026 competitive survey of string-art / spirograph / attractor / plotter tools — without changing Caustic's identity as a desktop generative-art instrument (no code-first scripting, no audio reactivity, no 3D, no mobile port; see [README.md](README.md#features) for the existing scope and [CLAUDE.md](CLAUDE.md#out-of-scope) for the firm out-of-scope list). Five small-to-medium deliverables, each independently shippable.
+**Status:** In progress (1/5). Informed by 2026-06-19 survey of comparable tools (notes below).
+**Deliverables:**
+
+- [x] **"Surprise me" button per generator** *(complete, 2026-06-19)* — `core/include/caustic/randomize.hpp` introduces `randomize_generator(spec, rng)` plus 16 per-type `randomize_*` functions, each drawing from a curated stable-region anchor list (canonical k values for modular chord, classic Spirograph R/r ratios for hypotrochoid, Pickover's attractor catalogue for Clifford / de Jong, narrow ±0.02 jitter for Tinkerbell to stay in basin, four canonical geometries for LinearEnvelope biased 80% to k=−1 for parabolic look, etc.). CustomChord is a documented no-op (hand-authored layouts shouldn't be wiped by a button) — the UI suppresses the button and surfaces a `(disabled — custom layout is hand-authored)` hint. Static `std::mt19937` in the panel seeded once from `random_device`. **18 new doctest cases** in `tests/test_randomize.cpp` cover range bounds, the `r < R` invariant from BUGS.md, basin radius for Tinkerbell, all-three-fan-modes coverage for DiamondStack, dispatcher safety across all 17 types, and seed determinism. 177 doctest cases total (was 159, +18). Pairs naturally with the [Nice-to-have backlog](#nice-to-have-polish-backlog-no-committed-timing)'s stable-point preset libraries — the curated presets become the "anchors" that the randomiser perturbs around.
+- [ ] **Shareable preset URLs (`caustic://` or query-string)** — bzip64-encode the preset JSON into a compact URL fragment so a user can share a preset by pasting a single string into chat / email / Twitter. No server required; the desktop app registers the scheme handler on install and pastes-to-load via a "Paste preset URL" menu entry. Previously parked under "WebAssembly version with shareable preset URLs" in [Beyond v1.2](#beyond-v12-future-no-commitment); promoted here because the URL part is achievable without the Wasm port and gives much of the discoverability benefit. ~half a day.
+- [ ] **Direct G-code / HPGL output behind plotter mode** — current SVG plotter mode (single colour, no opacity, lexicographically-sorted chords) is the right input for a pen plotter, but every plotter user still has to round-trip through `vpype` or the AxiDraw plugin. Native G-code (Grbl flavour) and HPGL outputs, with configurable pen-up/pen-down Z-heights and travel feedrate. CLI gets a `--format gcode` / `--format hpgl` flag in addition to the existing `-o out.svg`. Previously parked under "Plotter G-code post-processor as a separate companion tool" in Beyond v1.1; promoted here because keeping it in Caustic gives the determinism guarantee end-to-end. ~1–2 days.
+- [ ] **Image trace → CustomChord layer** — load a PNG / JPEG, run an edge detector (Canny or similar), sample N points along the strongest edges, and emit them as a CustomChord layer (nails + chord pairs chosen by a configurable rule: every-Nth, nearest-neighbour, all-pairs above a length threshold). Output is a normal Caustic preset the user can keep editing — distinguishes from photo-string-art tools whose output is build instructions for a physical peg board. ~2 days.
+- [ ] **Visual timeline editor for Keyframed envelope** — replace the current table-of-rows editor with a 2D curve view: time on the x-axis, value on the y-axis, drag points to add / move / delete, snap-to-grid, optional curve interpolation modes (linear / smooth-step / catmull-rom). Closes the longest-deferred Phase 8 item. The existing `Keyframed { vector<pair<t, value>> }` data structure stays unchanged — this is pure UX. ~2 days.
+
+**Survey notes (2026-06-19).** Caustic's unique combination — chord patterns + roulette curves + parametric envelopes + strange attractors + custom-nail editor + multi-layer scenes + deterministic vector output, all in a desktop GUI — has no direct competitor. The adjacent niches are: photo-to-string-art web tools (different product: physical-build instructions); single-family spirograph apps (web + iOS — narrower than Caustic); strange-attractor visualisers like Chaoscope (specialised; no chord / spiro / envelope); and general creative-coding frameworks (Processing, p5.js, nannou — code-first, no GUI instrument). What competitors *do* have that we don't: randomisation, sharing / galleries, direct plotter output, image-trace input, and timeline-style animation editors — hence the five items above.
+
+**Acceptance:** A new user can hit "Surprise me" on a fresh launch and land on a recognisable canonical pattern (not noise) for each generator; a user can copy a preset URL to a friend and have them paste it into the app to see the same scene; the CLI emits valid G-code that an AxiDraw owner can plot directly without a `vpype` detour; an image dropped onto the canvas creates a CustomChord layer that visibly traces the input's strong edges; the Keyframed envelope's animation panel shows a draggable 2D curve and the underlying data still round-trips through the existing JSON schema.
+
+---
+
 ## Nice-to-have polish backlog *(no committed timing)*
 
 The original v1.1-era backlog (keyboard shortcuts, polar grid, per-chord stroke, preset thumbnails, universal pan, scatter attractors, LinearEnvelope drag editor, Keyframed envelope, PNG/GIF/mp4 bake) all shipped in the v1.1 polish batch above. What remains:
@@ -304,15 +322,16 @@ The original v1.1-era backlog (keyboard shortcuts, polar grid, per-chord stroke,
 - Stable-region indicator on continuous sliders — compute a "packing quality" metric over parameter space and draw a marker bar under the slider showing where local maxima live. Would auto-surface stable points without curation. Tried and rejected for now as over-engineered relative to snap buttons + curated presets.
 - Preset-borne animation — serialise `AnimationSpec` into the preset so a saved scene can replay its animation on load. Carried over from Phase 8 deferred; would bump the preset schema to v3.
 - General `HybridGenerator(curve, N, k)` with nested-`ParametricCurve` JSON encoding. Currently out of scope — `MaurerRose`, `LissajousChord`, `SuperformulaChord`, `PolygonChord`, `PhyllotaxisChord` cover the user-visible chord-pattern family as concrete special cases.
+- **First-run tutorial overlay** — short interactive walkthrough on first launch that points at the Parameters tab, the canvas, the export button, and the bundled-preset list. MANUAL.md covers the same ground but new users won't read it. Should be skippable + dismissible-forever. Low-effort, medium-impact discoverability item from the 2026-06-19 competitive survey.
+- **Stylus / tablet pressure sensitivity in the CustomChord editor** — Wacom and friends report pressure via `WM_POINTER` (Windows), the X Input extension (Linux), or NSEvent's pressure field (macOS). Useful angle for CustomChord: pressure modulates the per-chord stroke width as you place the connecting click. Niche but a clean differentiator for tablet users; would interact well with the recently-added per-chord width overrides.
 
 ---
 
-## Beyond v1.1 *(future, no commitment)*
+## Beyond v1.2 *(future, no commitment)*
 
-These are noted to keep the door open. None are scoped or scheduled.
+These are noted to keep the door open. None are scoped or scheduled. Direct G-code output and shareable preset URLs both used to live here; both moved up to Phase 13 once the 2026-06-19 competitive survey clarified they're achievable without changing Caustic's identity. The remaining items would each shift the project's identity meaningfully (audio, 3D, web platform), so they stay parked.
 
 - Harmonograph generator
 - Lissajous 3D variant (Bowditch curves)
 - Audio reactivity (parameter modulation from FFT)
-- Plotter G-code post-processor as a separate companion tool
-- WebAssembly version with shareable preset URLs
+- WebAssembly browser build (with the existing Phase 13 shareable-URL scheme reused for `?preset=...` query strings → instant remix-this-preset links)

@@ -6,9 +6,9 @@ Caustic is a C++20 desktop studio for generative geometric art — chord pattern
 
 ## Current state
 
-**v1 functionally complete (Phases 0–7, 2026-05-10).** Four generators (modular chord + three roulettes), full style system, rlImGui UI with live editing + scroll-wheel modifiers + coarse drag preview + camera (pan/zoom/fullscreen), preset save/load to XDG dir, SVG export with plotter mode, and a headless `caustic-cli`. `render/` is split into `caustic-render-svg` (no raylib, always built) and `caustic-render-raylib` (gated on `CAUSTIC_BUILD_APP`). Shared `caustic::geometry_from_spec` / `caustic::style_from_spec` factories let the CLI consume the same code paths as the GUI without pulling raylib in. CI on every push runs full + headless builds + batch SVG render. Build green, 64 doctest cases + 10 CLI CTest smoke cases passing.
+**v1.1 feature-complete (Phases 0–11 + v1.1 polish + Phase 13.1, 2026-06-19).** 17 generators across three pipeline tiers (chord sets + parametric curves + iterative orbits, with a scatter render-mode for the attractors). Multi-layer scenes with per-layer transform + array tools (rotational / grid / mirror). Full style system. IDE-style three-pane layout with draggable sidebars (Parameters + Style on the left; Layers + Presets + Animation on the right; canvas in the middle). CustomChord nail editor with six modes, undo/redo, per-chord colour/gradient/width/opacity. LinearEnvelope drag editor with handle-to-handle snap. Editor grid (rectangular or polar) persisted in the preset. Animation system: `Static` / `Linear` / `Sine` / `Keyframed` envelopes × 29 animatable targets. Frame bake: SVG-sequence / PNG-sequence (+ optional ffmpeg mp4) / in-process GIF, with automatic cleanup of per-frame intermediates after a single-file output. Static-image export: SVG (with plotter mode) / PNG / JPEG (raylib's `SUPPORT_FILEFORMAT_JPG` flag enabled at the CMake level). Native file dialogs (tinyfiledialogs). Preset browser with 96×96 thumbnails. Universal pan (middle-drag / Spacebar+drag / smart left-drag). "Surprise me" per-generator randomiser drawing from curated stable-region anchors. AppImage packaging (Linux). Headless `caustic-cli`. CI runs full + headless builds + batch SVG render. **177 doctest cases + 33 CTest CLI smoke cases passing.**
 
-Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui `Raylib_6_0`, Dear ImGui v1.92.7, nlohmann/json v3.11.3, doctest v2.4.11. rlImGui's `Raylib_*` tags name the matching raylib release — bump in lockstep.
+Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0 (with `SUPPORT_FILEFORMAT_JPG=1` and `SUPPORT_FILEFORMAT_BMP=1` set via `target_compile_definitions` because raylib's `config.h` ships those formats commented out — see BUGS.md), rlImGui `Raylib_6_0`, Dear ImGui v1.92.7, nlohmann/json v3.11.3, doctest v2.4.11, tinyfiledialogs v2.9.3 (native file pickers), msf_gif v2.3 (GIF encoder). rlImGui's `Raylib_*` tags name the matching raylib release — bump in lockstep. mp4 export uses an external `ffmpeg` on `PATH`. CMake project langs are `C CXX` because tinyfiledialogs ships C source.
 
 **Phase 4 deviation worth remembering:** R/r and a/b sliders are integer-only. The architecture's "drag through irrational a/b to watch Lissajous precess" demo is unavailable until someone adds a sample-over-many-revolutions mode + toggle. d, A, B, φ stay continuous (they don't affect closure).
 
@@ -18,17 +18,22 @@ Pinned dependency matrix (BUILD.md is the source of truth): raylib 6.0, rlImGui 
 
 ## Active task
 
-**Phase 11 complete (2026-05-11). v1.1 generator set finalised — 12 generators across three pipeline tiers.** Clifford, de Jong, and Tinkerbell join the family via `iterate_orbit` (template step iterator with burn-in + divergence detection). The new "iterative orbit as polyline" tier sits alongside the closed-form curve and chord-set tiers. Three bundled presets ship with styling tuned for the polyline-connect-iterates render path. Animation `Target` enum gains 12 new entries (a/b/c/d × 3 attractors) so envelopes can sweep coefficients. 123 doctest cases (114 → 123), 23 CTest CLI smoke cases (20 → 23).
+**Phase 13 in progress (1/5 deliverables shipped, started 2026-06-19).** v1.2 competitive feature expansion — five small-to-medium items informed by the 2026-06-19 survey of comparable string-art / spirograph / attractor / plotter tools. Each is independently shippable.
 
-Next: **Phase 12 — Polish & release.** README screenshots / animated GIFs, expanded curated preset gallery (see "Nice-to-have polish backlog"), Windows cross-compile, itch.io page. Shortest path to a public 1.0 — all v1.1 generator phases are now closed.
+- [x] **Phase 13.1 — "Surprise me" per-generator randomiser** *(complete, 2026-06-19)*. New `core/include/caustic/randomize.hpp` exposes `randomize_generator(spec, rng)` plus 16 per-type `randomize_*` functions, each pulling from a curated stable-region anchor list. CustomChord is the documented no-op (hand-authored layout protection). 18 new doctest cases; total 177 (was 159).
+- [ ] **Phase 13.2 — Shareable preset URLs** (`caustic://` or query-string-encoded JSON). Bzip64-encode the preset into a compact string, register the scheme handler on install, add a "Paste preset URL" menu entry.
+- [ ] **Phase 13.3 — Direct G-code / HPGL output behind plotter mode.** CLI gains `--format gcode` / `--format hpgl` in addition to the existing `-o out.svg`. Configurable pen-up/pen-down Z-heights and travel feedrate.
+- [ ] **Phase 13.4 — Image trace → CustomChord layer.** Load an image, run edge detection, sample N points along the strongest edges, emit a CustomChord layer the user can keep editing. Distinguishes Caustic from photo-string-art tools whose output is a peg-board build script.
+- [ ] **Phase 13.5 — Visual timeline editor for `Keyframed` envelope.** Replaces the current table-of-rows editor with a draggable 2D curve view. Underlying data structure unchanged — pure UX.
 
-**Deferred from Phase 11:** points/scatter geometry tier. Strange attractors are conventionally rendered as one dot per iterate; current pipeline only has `polylines` + `chords` so we connect consecutive iterates. Result reads as orbital density but has a visible stroke texture on Clifford / de Jong. Adding `GeometryBuffer.points` (1×1 px in raylib, tiny `<circle>` in SVG) would give the canonical scatter look — ~150 lines across `geometry_buffer.hpp`, both renderers, and the factory. Reusable for a future phyllotaxis-points mode.
+Then **Phase 12 — Polish & release** for public 1.0: README screenshots / animated GIFs, license decision, Windows mingw-w64 cross-compile, itch.io page, optional emscripten web build.
 
-**Deferred from Phase 8:** `Keyframed` envelope (arbitrary control points — needs a 2D curve-editor widget, separate UX project); preset-borne animation (`AnimationSpec` lives only in `AppState`, not serialised — adding it would bump the preset schema again).
+**Deferred (older items still open):**
 
-**Deferred from Phase 9 Stage B** (not in any committed phase): full hybrid-mode generator (`HybridGenerator(curve, N, k)` — modular chord rule on any `ParametricCurve`) plus `MaurerRose` as its special case on rose. The concrete chord-set special cases (`polygon_chord`, `phyllotaxis_chord`) cover the user-visible string-art family without the nested-generator JSON refactor general hybrid mode would require.
-
-**Deferred from Phase 10:** canvas-drag editing for `LinearEnvelope` endpoints (sliders work, drag would be a UX upgrade).
+- **Preset-borne animation** — serialise `AnimationSpec` into the preset so a saved scene replays its animation on load. Carried over from Phase 8. Would bump the preset schema to v3.
+- **General `HybridGenerator(curve, N, k)`** — nested-`ParametricCurve` JSON encoding. Out of scope: `MaurerRose`, `LissajousChord`, `SuperformulaChord`, `PolygonChord`, `PhyllotaxisChord` cover the chord-pattern family as concrete special cases.
+- **Curated stable-point preset libraries per generator** (the "60% of target gallery" entry in ROADMAP) — pairs naturally with the Phase 13.1 Surprise-me anchors.
+- **First-run tutorial overlay** and **stylus pressure sensitivity in CustomChord** — recently added to the Nice-to-have backlog from the 2026-06-19 survey.
 
 ## Invariants
 

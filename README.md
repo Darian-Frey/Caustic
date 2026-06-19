@@ -1,7 +1,7 @@
 > **Status:** Active — v1.1 feature-complete, polish & release pending
 > **Provenance:** Shane Hartley (Darian-Frey, primary author); Claude (architect, implementation assistant, doc scaffolding)
-> **Last reviewed:** 2026-05-18
-> **Why this status:** Phases 0–11 closed plus v1.1 polish (extra generators, scatter attractors, LinearEnvelope drag editor, Keyframed envelope, PNG/GIF/mp4 bake, CustomChord editor, polar grid, per-chord stroke, preset thumbnails, universal pan, keyboard shortcuts, IDE-style draggable-sidebar layout, multi-format static export). 17 generators across three pipeline tiers; multi-layer scenes; animation system; SVG/PNG/JPEG static export plus SVG/PNG-sequence/GIF/mp4 animation bake; headless CLI. Only Phase 12 (README screenshots, license, Windows cross-compile, itch.io page) remains for the public 1.0.
+> **Last reviewed:** 2026-06-19
+> **Why this status:** Phases 0–11 closed plus v1.1 polish (extra generators, scatter attractors, LinearEnvelope drag editor, Keyframed envelope, PNG/GIF/mp4 bake, CustomChord editor, polar grid, per-chord stroke, preset thumbnails, universal pan, keyboard shortcuts, IDE-style draggable-sidebar layout, multi-format static export). Phase 13 in progress (v1.2 competitive features, 1/5 shipped: per-generator "Surprise me" randomiser). 17 generators across three pipeline tiers; multi-layer scenes; animation system; SVG/PNG/JPEG static export plus SVG/PNG-sequence/GIF/mp4 animation bake; headless CLI. Only Phase 12 (README screenshots, license, Windows cross-compile, itch.io page) remains for the public 1.0.
 
 # Caustic
 
@@ -53,6 +53,7 @@ Seventeen generators across three pipeline tiers. All produce math-up world coor
 ## Features
 
 - **IDE-style three-pane layout** — left sidebar (Parameters + Style tabs), centered canvas, right sidebar (Layers + Presets + Animation tabs). Both sidebars are draggable via thin splitter strips; widths clamp so the canvas can't collapse. Defaults to 320 px sidebars.
+- **"Surprise me" per-generator randomiser** — one click rolls a fresh parameter set from the active generator's curated stable-region anchor list. Lands on aesthetic islands (cardioid / nephroid / sunflower / canonical attractor / parabolic envelope / …) instead of chaotic noise. Greyed out for CustomChord to protect hand-authored layouts.
 - **Multi-layer scenes** with per-layer transform (translate / rotate / scale / mirror) and visibility toggle.
 - **Array tools** — rotational, grid, mirror-reflect — produce N concrete layers from a seed layer with one click.
 - **Style system** — solid / linear-gradient / HSV-sweep / diverging colour maps, four indexers (chord index, length, angle, curve t), variable stroke width, opacity, cyclic-curve continuity flag.

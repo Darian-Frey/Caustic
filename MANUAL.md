@@ -1,7 +1,7 @@
 # Caustic — User Manual
 
-> **Status:** v1.1 — covers all features through Phase 11 + v1.1 polish
-> **Last reviewed:** 2026-05-18
+> **Status:** v1.1 + Phase 13.1 — covers all features through v1.1 polish plus the "Surprise me" randomiser
+> **Last reviewed:** 2026-06-19
 
 A practical guide to driving Caustic — what each control does, what each generator produces, and how to compose common string-art patterns.
 
@@ -58,6 +58,8 @@ Each panel has a **Reset** button to return to its struct defaults — useful fo
 ## The 17 generators
 
 Three families. Switch with the **Generator** combo at the top of the Parameters panel, or with keys `1`–`4` (modular chord / hypotrochoid / epitrochoid / Lissajous).
+
+**Don't know where to start?** Click **Surprise me** directly under the Generator combo. It rolls a fresh parameter set for the active generator from a curated stable-region anchor list (canonical k values for modular chord, classic Spirograph R/r ratios for the roulettes, the golden angle for phyllotaxis, Pickover's well-known attractor coefficients for Clifford / de Jong, parabolic-envelope k=−1 with curated geometries for LinearEnvelope, etc.) — you land on aesthetic islands, never in chaotic noise. Click again for a different one. The button is greyed out for CustomChord because that's a hand-authored layout and shouldn't be wiped by a button click.
 
 ### Chord sets
 
