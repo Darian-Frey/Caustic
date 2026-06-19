@@ -199,14 +199,15 @@ void RaylibRenderer::redraw(const std::vector<LayerRender>& layers,
     EndTextureMode();
 }
 
-void RaylibRenderer::blit_to_screen() const {
+void RaylibRenderer::blit_to_screen(int x_offset, int y_offset) const {
     const Rectangle src = {
         0.0f, 0.0f,
         static_cast<float>(canvas_.texture.width),
         -static_cast<float>(canvas_.texture.height),
     };
     const Rectangle dst = {
-        0.0f, 0.0f,
+        static_cast<float>(x_offset),
+        static_cast<float>(y_offset),
         static_cast<float>(width_),
         static_cast<float>(height_),
     };

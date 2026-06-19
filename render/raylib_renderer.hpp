@@ -29,7 +29,11 @@ public:
                 Color background,
                 const CameraState& camera);
 
-    void blit_to_screen() const;
+    // Blit the offscreen canvas to the window. With no args it covers the
+    // whole window (legacy behaviour). With x_offset / y_offset it draws into
+    // the canvas region of an IDE-style three-pane layout — the sidebars
+    // overlay the rest themselves.
+    void blit_to_screen(int x_offset = 0, int y_offset = 0) const;
 
     // Write the offscreen canvas as a PNG to the given path. Used by the
     // PNG-sequence bake. Returns true on success.
@@ -46,6 +50,11 @@ public:
     // custom-chord nail editor) to convert mouse-screen-coords back to
     // world coords. Returns 0 if no redraw has happened yet.
     double last_fit_scale() const { return last_fit_scale_; }
+
+    // Current offscreen-canvas dimensions. Used by the PNG/GIF bake
+    // functions to save the live size before temporarily resizing for export.
+    int width()  const { return width_; }
+    int height() const { return height_; }
 
     // Read-only access to the offscreen canvas's GPU texture. The texture is
     // bottom-up (a raylib RenderTexture artefact); the preset-thumbnail builder

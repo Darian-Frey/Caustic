@@ -103,45 +103,48 @@ enum class NailEditMode { Off, AddNail, AddChord, MoveNail, RecolourChord, Selec
 // round-trip through save/load. See preset.hpp for the EditorGrid struct.
 
 // Draw the editor grid overlay on top of the canvas. Caller passes the
-// screen-coord conversion (cx, cy = canvas centre in pixels, pan x/y in pixels,
-// scale = pixels-per-world-unit). Rectangular mode = axis-aligned lines.
-// Polar mode = concentric circles + N rays from origin.
+// screen-coord conversion (cx, cy = canvas centre in pixels — these are
+// **window-space coordinates** so we share them with raylib calls; pan x/y in
+// pixels, scale = pixels-per-world-unit). canvas_x/y/w/h is the canvas
+// region in window-space — the grid clips to that rectangle so sidebars
+// don't get garnished and the world-extent loop terminates correctly when the
+// canvas is narrow.
 inline void draw_grid_overlay(caustic::EditorGridMode mode,
                               double spacing, int spokes,
                               double cx, double cy,
                               double pan_x, double pan_y,
                               double scale,
-                              int screen_w, int screen_h) {
+                              int canvas_x, int canvas_y,
+                              int canvas_w, int canvas_h) {
     if (spacing < 1e-6) return;
     const ::Color grid_col{80, 110, 130, 90};
 
     if (mode == caustic::EditorGridMode::Rectangular) {
-        const double world_x_min = (0.0 - cx - pan_x) / scale;
-        const double world_x_max = (screen_w - cx - pan_x) / scale;
-        const double world_y_min = -((screen_h - cy - pan_y) / scale);
-        const double world_y_max = -((0.0 - cy - pan_y) / scale);
+        const double world_x_min = (canvas_x - cx - pan_x) / scale;
+        const double world_x_max = ((canvas_x + canvas_w) - cx - pan_x) / scale;
+        const double world_y_min = -(((canvas_y + canvas_h) - cy - pan_y) / scale);
+        const double world_y_max = -((canvas_y - cy - pan_y) / scale);
         if ((world_x_max - world_x_min) / spacing > 400.0) return;
         if ((world_y_max - world_y_min) / spacing > 400.0) return;
         const int ix_start = static_cast<int>(std::floor(world_x_min / spacing));
         const int ix_end   = static_cast<int>(std::ceil(world_x_max / spacing));
         for (int ix = ix_start; ix <= ix_end; ++ix) {
             const float sx = static_cast<float>(cx + pan_x + ix * spacing * scale);
-            DrawLine(static_cast<int>(sx), 0,
-                     static_cast<int>(sx), screen_h, grid_col);
+            DrawLine(static_cast<int>(sx), canvas_y,
+                     static_cast<int>(sx), canvas_y + canvas_h, grid_col);
         }
         const int iy_start = static_cast<int>(std::floor(world_y_min / spacing));
         const int iy_end   = static_cast<int>(std::ceil(world_y_max / spacing));
         for (int iy = iy_start; iy <= iy_end; ++iy) {
             const float sy = static_cast<float>(cy + pan_y - iy * spacing * scale);
-            DrawLine(0, static_cast<int>(sy),
-                     screen_w, static_cast<int>(sy), grid_col);
+            DrawLine(canvas_x, static_cast<int>(sy),
+                     canvas_x + canvas_w, static_cast<int>(sy), grid_col);
         }
         return;
     }
 
-    // Polar
-    // Rings: choose a max radius that just covers the visible canvas
-    // (distance from origin to the farthest screen corner).
+    // Polar — concentric rings + N spokes around (cx + pan, cy + pan).
+    // Max ring radius is the farthest canvas-corner distance from origin.
     const float ocx = static_cast<float>(cx + pan_x);
     const float ocy = static_cast<float>(cy + pan_y);
     auto pixel_dist = [&](double sx, double sy) {
@@ -149,8 +152,11 @@ inline void draw_grid_overlay(caustic::EditorGridMode mode,
         const double dy = sy - ocy;
         return std::sqrt(dx * dx + dy * dy);
     };
-    const double corner_px = std::max(std::max(pixel_dist(0, 0), pixel_dist(screen_w, 0)),
-                                       std::max(pixel_dist(0, screen_h), pixel_dist(screen_w, screen_h)));
+    const double corner_px = std::max(
+        std::max(pixel_dist(canvas_x, canvas_y),
+                 pixel_dist(canvas_x + canvas_w, canvas_y)),
+        std::max(pixel_dist(canvas_x, canvas_y + canvas_h),
+                 pixel_dist(canvas_x + canvas_w, canvas_y + canvas_h)));
     const double r_max_world = corner_px / scale;
     if (r_max_world / spacing > 400.0) return;
     const int n_rings = static_cast<int>(std::ceil(r_max_world / spacing));
@@ -296,6 +302,14 @@ struct AppState {
     bool left_drag_pan = false;
     // Editor grid state moved into preset.editor_grid so saves persist it.
     bool nail_numbers_visible = true; // draw the index label above each nail (UI-only)
+
+    // IDE-style three-pane layout. Left + right sidebars hold all the panels
+    // (Parameters/Style tabs on the left, Layers/Presets/Animation tabs on
+    // the right); the canvas fills the middle. Widths are draggable via the
+    // splitters between sidebar and canvas. Clamped to [180, screen_w * 0.45]
+    // so the canvas can't collapse to zero width.
+    float left_panel_width  = 320.0f;
+    float right_panel_width = 320.0f;
     caustic::Color nail_active_color    {0.9, 0.9, 0.9, 1.0};  // chord start colour
     caustic::Color nail_active_color_end{0.9, 0.9, 0.9, 1.0};  // chord end colour (== start = solid)
     // Per-chord stroke for newly-placed chords in AddChord mode. When equal to
@@ -598,9 +612,8 @@ void reset_preset_to_default(AppState& state) {
 // ---------------------------------------------------------------------------
 // UI panels
 
-void render_param_panel(AppState& state) {
+void render_param_panel_content(AppState& state) {
     auto& p = state.current_layer();  // edit the layer the user has selected
-    ImGui::Begin("Parameters");
 
     int gen_idx = static_cast<int>(p.generator.type);
     if (ImGui::Combo("Generator", &gen_idx, kGeneratorNames, IM_ARRAYSIZE(kGeneratorNames))) {
@@ -1000,7 +1013,7 @@ void render_param_panel(AppState& state) {
                 state.dirty = true;
             }
             ImGui::SameLine();
-            if (ImGui::Button("Clear chord colours (use style colormap)")) {
+            if (ImGui::Button("Clear chord colours")) {
                 push_undo();
                 c.chord_colors.clear();
                 c.chord_end_colors.clear();
@@ -1008,10 +1021,10 @@ void render_param_panel(AppState& state) {
             }
 
             ImGui::Separator();
-            ImGui::TextDisabled("Per-chord stroke (overrides layer style for selected/all chords):");
+            ImGui::TextDisabled("Per-chord stroke (overrides layer style):");
             if (slider_double_w("active width",   &state.nail_active_width,   0.1, 8.0, 0.01, "%.2f")) {}
             if (slider_double_w("active opacity", &state.nail_active_opacity, 0.0, 1.0, 0.01, "%.2f")) {}
-            if (ImGui::Button("Apply width/opacity to all")) {
+            if (ImGui::Button("Apply to all")) {
                 push_undo();
                 c.chord_widths.assign(c.chords.size(), state.nail_active_width);
                 c.chord_opacities.assign(c.chords.size(), state.nail_active_opacity);
@@ -1037,7 +1050,7 @@ void render_param_panel(AppState& state) {
             }
             ImGui::EndDisabled();
             ImGui::SameLine();
-            if (ImGui::Button("Clear stroke overrides (use style)")) {
+            if (ImGui::Button("Clear stroke overrides")) {
                 push_undo();
                 c.chord_widths.clear();
                 c.chord_opacities.clear();
@@ -1047,9 +1060,9 @@ void render_param_panel(AppState& state) {
             ImGui::Separator();
             ImGui::Checkbox("show grid", &state.preset.editor_grid.visible);
             ImGui::SameLine();
-            ImGui::Checkbox("snap to grid", &state.preset.editor_grid.snap);
+            ImGui::Checkbox("snap", &state.preset.editor_grid.snap);
             ImGui::SameLine();
-            ImGui::Checkbox("show pin numbers", &state.nail_numbers_visible);
+            ImGui::Checkbox("pin #", &state.nail_numbers_visible);
             {
                 static const char* const kGridModes[] = {"rectangular", "polar"};
                 int gm = static_cast<int>(state.preset.editor_grid.mode);
@@ -1138,13 +1151,10 @@ void render_param_panel(AppState& state) {
     ImGui::TextDisabled("scroll wheel on slider: ± step   Shift: ×10   Ctrl: ×0.1");
     ImGui::TextDisabled("keys 1–4: switch generator   F or 0: reset camera   F11: fullscreen");
     ImGui::TextDisabled("middle drag: pan   scroll on canvas: zoom");
-
-    ImGui::End();
 }
 
-void render_style_panel(AppState& state) {
+void render_style_panel_content(AppState& state) {
     caustic::StyleSpec& s = state.current_layer().style;
-    ImGui::Begin("Style");
 
     int cm = static_cast<int>(s.colormap_type);
     if (ImGui::Combo("Color map", &cm, kColorMapNames, IM_ARRAYSIZE(kColorMapNames))) {
@@ -1196,7 +1206,9 @@ void render_style_panel(AppState& state) {
     ImGui::Separator();
 
     if (color_edit_double("background", &state.preset.scene.background)) state.dirty = true;
-    if (ImGui::Checkbox("cyclic (closed-curve continuity)", &s.cyclic)) state.dirty = true;
+    if (ImGui::Checkbox("cyclic", &s.cyclic)) state.dirty = true;
+    ImGui::SameLine();
+    ImGui::TextDisabled("(closed-curve continuity)");
 
     if (ImGui::Button("Reset style")) {
         // Resets the active layer's StyleSpec only. Scene-level background is
@@ -1207,13 +1219,9 @@ void render_style_panel(AppState& state) {
 
     ImGui::Separator();
     ImGui::TextDisabled("click any color square for hex/RGB/HSV input");
-
-    ImGui::End();
 }
 
-void render_layers_panel(AppState& state) {
-    ImGui::Begin("Layers");
-
+void render_layers_panel_content(AppState& state) {
     // ----- Layer list -----
     auto& layers = state.preset.scene.layers;
     if (layers.empty()) layers.emplace_back();
@@ -1349,8 +1357,6 @@ void render_layers_panel(AppState& state) {
         layers.insert(layers.begin() + idx, derived.begin(), derived.end());
         state.dirty = true;
     }
-
-    ImGui::End();
 }
 
 // ---------------------------------------------------------------------------
@@ -1360,9 +1366,8 @@ fs::path user_animation_dir() {
     return caustic::user_preset_dir().parent_path() / "animations";
 }
 
-void render_animation_panel(AppState& state, caustic::RaylibRenderer& renderer) {
+void render_animation_panel_content(AppState& state, caustic::RaylibRenderer& renderer) {
     auto& anim = state.animation;
-    ImGui::Begin("Animation");
 
     // Target picker. Listed in the same order as caustic::anim::Target so
     // the index round-trips cleanly.
@@ -1544,8 +1549,8 @@ void render_animation_panel(AppState& state, caustic::RaylibRenderer& renderer) 
         try {
             fs::create_directories(dir);
             const int frames = std::max(2, anim.bake_frames);
-            const int orig_w = GetScreenWidth();
-            const int orig_h = GetScreenHeight();
+            const int orig_w = renderer.width();
+            const int orig_h = renderer.height();
             const int sz = std::max(64, state.export_size);
             renderer.resize(sz, sz);
             for (int i = 0; i < frames; ++i) {
@@ -1606,8 +1611,8 @@ void render_animation_panel(AppState& state, caustic::RaylibRenderer& renderer) 
         try {
             if (path.has_parent_path()) fs::create_directories(path.parent_path());
             const int frames = std::max(2, anim.bake_frames);
-            const int orig_w = GetScreenWidth();
-            const int orig_h = GetScreenHeight();
+            const int orig_w = renderer.width();
+            const int orig_h = renderer.height();
             const int sz = std::max(64, state.export_size);
             renderer.resize(sz, sz);
 
@@ -1670,15 +1675,11 @@ void render_animation_panel(AppState& state, caustic::RaylibRenderer& renderer) 
     if (!state.status_message.empty()) {
         ImGui::TextDisabled("%s", state.status_message.c_str());
     }
-
-    ImGui::End();
 }
 
-void render_preset_panel(AppState& state,
-                         caustic::RaylibRenderer& thumb_renderer,
-                         ThumbnailCache& thumbs) {
-    ImGui::Begin("Presets");
-
+void render_preset_panel_content(AppState& state,
+                                 caustic::RaylibRenderer& thumb_renderer,
+                                 ThumbnailCache& thumbs) {
     // Save section. Quick "Save" writes to the default XDG dir using the
     // name field; "Save as…" opens a native file picker for arbitrary paths.
     ImGui::Text("Save (default dir: %s)", caustic::user_preset_dir().string().c_str());
@@ -1731,19 +1732,115 @@ void render_preset_panel(AppState& state,
     if (ImGui::Button("Refresh")) { refresh_preset_lists(state); thumbs.clear(); }
 
     ImGui::Separator();
-    ImGui::Text("Export SVG (default dir: %s)", user_export_dir().string().c_str());
+    ImGui::Text("Export SVG");
     ImGui::PushItemWidth(180);
     ImGui::InputText("filename", state.export_name_buf, sizeof(state.export_name_buf));
     ImGui::PopItemWidth();
     ImGui::SliderInt("size", &state.export_size, 256, 4096);
-    ImGui::Checkbox("plotter mode (single colour, no opacity, sorted)", &state.export_plotter_mode);
-
-    if (ImGui::Button("Export SVG")) quick_export_svg(state);
+    ImGui::Checkbox("plotter mode", &state.export_plotter_mode);
     ImGui::SameLine();
-    if (ImGui::Button("Export as…")) export_as_svg(state);
+    ImGui::TextDisabled("(single colour, no opacity, sorted)");
 
-    ImGui::TextDisabled("Shortcuts: Ctrl+S save  Ctrl+Shift+S save as  Ctrl+O open  Ctrl+E export  Ctrl+N new");
+    if (ImGui::Button("Export SVG…")) export_as_svg(state);
 
+    ImGui::TextDisabled("Shortcuts: Ctrl+S save  Ctrl+Shift+S save as  Ctrl+O open  Ctrl+E export…  Ctrl+N new");
+}
+
+// ---------------------------------------------------------------------------
+// IDE-style three-pane layout
+//
+// Left sidebar: Parameters + Style as tabs.
+// Right sidebar: Layers + Presets + Animation as tabs.
+// Canvas: middle region, drawn by raylib + ImGui overlays for the editors.
+// Both sidebars are draggable via splitter handles between sidebar and canvas;
+// widths are clamped so the canvas can't collapse to zero.
+
+// Vertical-axis splitter — drawn as a thin filled bar with hover/active state
+// colours and an EW resize cursor. Drags update *width; clamps to [min, max].
+// Called inside a dedicated borderless ImGui window so the splitter sits over
+// the gap between sidebar and canvas without intruding on either.
+inline void draw_v_splitter(const char* id, float* width, float min_w,
+                            float max_w, float thickness, float full_height) {
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32( 55,  55,  65, 255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(100, 140, 200, 255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(130, 170, 230, 255));
+    ImGui::Button(id, ImVec2(thickness, full_height));
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+    if (ImGui::IsItemActive()) {
+        const float delta = ImGui::GetIO().MouseDelta.x;
+        if (delta != 0.0f) {
+            *width = std::clamp(*width + delta, min_w, max_w);
+        }
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+}
+
+// Helper for the sidebar windows — fixed in place each frame, no title bar /
+// resize / move so they behave like docked panes.
+constexpr ImGuiWindowFlags kSidebarFlags =
+    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+    ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+constexpr ImGuiWindowFlags kSplitterWindowFlags =
+    kSidebarFlags | ImGuiWindowFlags_NoScrollbar |
+    ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground;
+
+// Push a text wrap boundary at the right edge of the current window so
+// long ImGui::Text* lines (especially the TextDisabled hint blocks) wrap
+// onto multiple lines instead of disappearing past the sidebar. Has no
+// effect on button or slider labels — those need shorter strings.
+inline void push_panel_wrap() { ImGui::PushTextWrapPos(0.0f); }
+inline void pop_panel_wrap()  { ImGui::PopTextWrapPos(); }
+
+void render_left_sidebar(AppState& state, float width, float full_h) {
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, full_h), ImGuiCond_Always);
+    ImGui::Begin("##left_sidebar", nullptr, kSidebarFlags);
+    push_panel_wrap();
+    if (ImGui::BeginTabBar("##left_tabs", ImGuiTabBarFlags_None)) {
+        if (ImGui::BeginTabItem("Parameters")) {
+            render_param_panel_content(state);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Style")) {
+            render_style_panel_content(state);
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+    pop_panel_wrap();
+    ImGui::End();
+}
+
+void render_right_sidebar(AppState& state, float window_w, float width,
+                          float full_h, caustic::RaylibRenderer& renderer,
+                          caustic::RaylibRenderer& thumb_renderer,
+                          ThumbnailCache& thumbs) {
+    ImGui::SetNextWindowPos(ImVec2(window_w - width, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, full_h), ImGuiCond_Always);
+    ImGui::Begin("##right_sidebar", nullptr, kSidebarFlags);
+    push_panel_wrap();
+    if (ImGui::BeginTabBar("##right_tabs", ImGuiTabBarFlags_None)) {
+        if (ImGui::BeginTabItem("Layers")) {
+            render_layers_panel_content(state);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Presets")) {
+            render_preset_panel_content(state, thumb_renderer, thumbs);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Animation")) {
+            render_animation_panel_content(state, renderer);
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+    pop_panel_wrap();
     ImGui::End();
 }
 
@@ -1752,6 +1849,10 @@ void render_preset_panel(AppState& state,
 int main() {
     constexpr int kInitialWidth = 1280;
     constexpr int kInitialHeight = 800;
+
+    // Silence raylib's INFO-level boot chatter — keep warnings and errors so
+    // real problems (e.g. failed texture loads) still surface on stderr.
+    SetTraceLogLevel(LOG_WARNING);
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(kInitialWidth, kInitialHeight, "Caustic");
@@ -1775,9 +1876,41 @@ int main() {
         while (!WindowShouldClose()) {
         const ImGuiIO& io = ImGui::GetIO();
 
-        if (IsWindowResized()) {
-            renderer.resize(GetScreenWidth(), GetScreenHeight());
-            state.dirty = true;
+        // ---------------------------------------------------------------
+        // Compute the canvas region for this frame. Three-pane layout:
+        // left sidebar | splitter | canvas | splitter | right sidebar.
+        // The canvas region is what raylib renders into and what every
+        // mouse-to-world transform below references.
+        constexpr float kSplitterThickness = 4.0f;
+        const float window_w = static_cast<float>(GetScreenWidth());
+        const float window_h = static_cast<float>(GetScreenHeight());
+        const float max_sidebar = std::max(180.0f, window_w * 0.45f);
+        state.left_panel_width  = std::clamp(state.left_panel_width,  180.0f, max_sidebar);
+        state.right_panel_width = std::clamp(state.right_panel_width, 180.0f, max_sidebar);
+        const int canvas_x = static_cast<int>(state.left_panel_width + kSplitterThickness);
+        const int canvas_y = 0;
+        const int canvas_w = std::max(1,
+            static_cast<int>(window_w - state.left_panel_width - state.right_panel_width
+                              - 2.0f * kSplitterThickness));
+        const int canvas_h = static_cast<int>(window_h);
+        // Window-space centre of the canvas — used by every overlay's
+        // mouse↔world conversion.
+        const double canvas_cx = canvas_x + canvas_w / 2.0;
+        const double canvas_cy = canvas_y + canvas_h / 2.0;
+
+        // Resize the offscreen render target to match the canvas region.
+        // RaylibRenderer::resize already returns early when the size is
+        // unchanged, so calling it every frame is cheap. The dirty flag
+        // gets set whenever the size actually changes (window resize, or
+        // the user dragging a sidebar splitter) so the canvas redraws.
+        {
+            static int last_canvas_w = -1, last_canvas_h = -1;
+            if (canvas_w != last_canvas_w || canvas_h != last_canvas_h) {
+                renderer.resize(canvas_w, canvas_h);
+                state.dirty = true;
+                last_canvas_w = canvas_w;
+                last_canvas_h = canvas_h;
+            }
         }
 
         if (!io.WantCaptureMouse) {
@@ -1817,8 +1950,8 @@ int main() {
             const float wheel = GetMouseWheelMove();
             if (wheel != 0.0f) {
                 const Vector2 m = GetMousePosition();
-                const double cx = GetScreenWidth() / 2.0;
-                const double cy = GetScreenHeight() / 2.0;
+                const double cx = canvas_cx;
+                const double cy = canvas_cy;
                 const double factor = (wheel > 0.0f) ? 1.1 : (1.0 / 1.1);
                 const double new_zoom = std::clamp(state.preset.camera.zoom * factor, 0.1, 100.0);
                 const double effective = new_zoom / state.preset.camera.zoom;
@@ -1835,8 +1968,8 @@ int main() {
             auto& edit_layer = state.current_layer();
             if (edit_layer.generator.type == caustic::GeneratorType::CustomChord) {
                 const Vector2 m = GetMousePosition();
-                const double cx = GetScreenWidth() / 2.0;
-                const double cy = GetScreenHeight() / 2.0;
+                const double cx = canvas_cx;
+                const double cy = canvas_cy;
                 const double scale = renderer.last_fit_scale() * state.preset.camera.zoom;
                 if (scale > 1e-9) {
                     double world_x = (m.x - cx - state.preset.camera.pan_x_px) / scale;
@@ -2107,8 +2240,8 @@ int main() {
             // state as the CustomChord editor).
             if (edit_layer.generator.type == caustic::GeneratorType::LinearEnvelope) {
                 const Vector2 m = GetMousePosition();
-                const double cx = GetScreenWidth() / 2.0;
-                const double cy = GetScreenHeight() / 2.0;
+                const double cx = canvas_cx;
+                const double cy = canvas_cy;
                 const double scale = renderer.last_fit_scale() * state.preset.camera.zoom;
                 if (scale > 1e-9) {
                     double world_x = (m.x - cx - state.preset.camera.pan_x_px) / scale;
@@ -2231,9 +2364,7 @@ int main() {
                     else       quick_save_preset(state, &thumbs);
                 }
                 if (IsKeyPressed(KEY_O)) open_preset_dialog(state);
-                if (IsKeyPressed(KEY_E)) {
-                    if (shift) export_as_svg(state); else quick_export_svg(state);
-                }
+                if (IsKeyPressed(KEY_E)) export_as_svg(state);
                 if (IsKeyPressed(KEY_N)) reset_preset_to_default(state);
             }
 
@@ -2326,8 +2457,8 @@ int main() {
         }
 
         BeginDrawing();
-        ClearBackground(BLACK);
-        renderer.blit_to_screen();
+        ClearBackground(::Color{18, 18, 22, 255});  // sidebar background tint
+        renderer.blit_to_screen(canvas_x, canvas_y);
 
         // Custom-chord nail overlay — draw the placed nails as small numbered
         // circles on top of the canvas, so the user can see where to click to
@@ -2335,8 +2466,8 @@ int main() {
         {
             const auto& edit_layer_for_overlay = state.current_layer();
             if (edit_layer_for_overlay.generator.type == caustic::GeneratorType::CustomChord) {
-                const double cx = GetScreenWidth() / 2.0;
-                const double cy = GetScreenHeight() / 2.0;
+                const double cx = canvas_cx;
+                const double cy = canvas_cy;
                 const double scale = renderer.last_fit_scale() * state.preset.camera.zoom;
                 if (scale > 1e-9) {
                     if (state.preset.editor_grid.visible) {
@@ -2347,7 +2478,7 @@ int main() {
                                           state.preset.camera.pan_x_px,
                                           state.preset.camera.pan_y_px,
                                           scale,
-                                          GetScreenWidth(), GetScreenHeight());
+                                          canvas_x, canvas_y, canvas_w, canvas_h);
                     }
 
                     const auto& custom = edit_layer_for_overlay.generator.custom;
@@ -2446,8 +2577,8 @@ int main() {
             // segments + 4 draggable endpoint handles. Drawn after the canvas
             // blit so handles sit on top of the chord geometry.
             if (edit_layer_for_overlay.generator.type == caustic::GeneratorType::LinearEnvelope) {
-                const double cx = GetScreenWidth() / 2.0;
-                const double cy = GetScreenHeight() / 2.0;
+                const double cx = canvas_cx;
+                const double cy = canvas_cy;
                 const double scale = renderer.last_fit_scale() * state.preset.camera.zoom;
                 if (scale > 1e-9) {
                     if (state.preset.editor_grid.visible) {
@@ -2458,7 +2589,7 @@ int main() {
                                           state.preset.camera.pan_x_px,
                                           state.preset.camera.pan_y_px,
                                           scale,
-                                          GetScreenWidth(), GetScreenHeight());
+                                          canvas_x, canvas_y, canvas_w, canvas_h);
                     }
 
                     const auto& lenv = edit_layer_for_overlay.generator.lenv;
@@ -2515,11 +2646,51 @@ int main() {
         }
 
         rlImGuiBegin();
-        render_param_panel(state);
-        render_style_panel(state);
-        render_layers_panel(state);
-        render_animation_panel(state, renderer);
-        render_preset_panel(state, thumb_renderer, thumbs);
+        render_left_sidebar(state, state.left_panel_width, window_h);
+        render_right_sidebar(state, window_w, state.right_panel_width, window_h,
+                             renderer, thumb_renderer, thumbs);
+
+        // Splitter handles between sidebars and canvas. Each gets its own
+        // borderless ImGui window positioned exactly over the seam, so the
+        // drag hit-area is well-defined and ImGui's WantCaptureMouse flag
+        // correctly absorbs the click before raylib's pan logic sees it.
+        ImGui::SetNextWindowPos(ImVec2(state.left_panel_width, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(kSplitterThickness, window_h), ImGuiCond_Always);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::Begin("##left_splitter", nullptr, kSplitterWindowFlags);
+        draw_v_splitter("##left_split_btn", &state.left_panel_width,
+                        180.0f, max_sidebar, kSplitterThickness, window_h);
+        ImGui::End();
+        ImGui::PopStyleVar();
+
+        const float right_split_x = window_w - state.right_panel_width - kSplitterThickness;
+        ImGui::SetNextWindowPos(ImVec2(right_split_x, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(kSplitterThickness, window_h), ImGuiCond_Always);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::Begin("##right_splitter", nullptr, kSplitterWindowFlags);
+        // Inline splitter for the right pane — drag delta has the opposite
+        // sign from the left pane's draw_v_splitter helper (dragging right
+        // shrinks this panel, dragging left grows it).
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32( 55,  55,  65, 255));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(100, 140, 200, 255));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(130, 170, 230, 255));
+        ImGui::Button("##right_split_btn", ImVec2(kSplitterThickness, window_h));
+        if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        }
+        if (ImGui::IsItemActive()) {
+            const float delta = ImGui::GetIO().MouseDelta.x;
+            if (delta != 0.0f) {
+                state.right_panel_width = std::clamp(
+                    state.right_panel_width - delta, 180.0f, max_sidebar);
+            }
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar();
+        ImGui::End();
+        ImGui::PopStyleVar();
+
         const bool active_now = ImGui::IsAnyItemActive();
         rlImGuiEnd();
 
