@@ -42,17 +42,16 @@ First-time files are written under `$XDG_CONFIG_HOME/caustic/` (or `$HOME/.confi
 
 ## The interface
 
-Five panels around a central canvas:
+IDE-style three-pane layout: **left sidebar | canvas | right sidebar**. The two sidebars are tabbed; the canvas fills the middle.
 
-| Panel | Purpose |
+| Sidebar | Tabs |
 |---|---|
-| **Parameters** (top-left) | Pick a generator and tune its numbers |
-| **Style** (bottom-left) | Colour map, stroke, opacity, background |
-| **Layers** (top-right) | Add/remove/reorder layers; per-layer transform; array tools |
-| **Presets** (right) | Save, load bundled or user presets, export SVG; thumbnail browser |
-| **Animation** (bottom-right) | Envelope target + bake SVG / PNG / GIF / mp4 |
+| **Left** | **Parameters** (pick a generator and tune its numbers) · **Style** (colour map, stroke, opacity, background) |
+| **Right** | **Layers** (add/remove/reorder layers; per-layer transform; array tools) · **Presets** (save, load, thumbnail browser, export to SVG/PNG/JPEG) · **Animation** (envelope target + bake SVG / PNG / GIF / mp4) |
 
-Every parameter slider supports **Ctrl+click to type an exact value**, **scroll-wheel on hover to step**, **Shift = ×10 step**, **Ctrl = ×0.1 step**. Scroll-wheel over the canvas zooms instead.
+**Resize sidebars** — hover the thin strip between sidebar and canvas; the cursor turns into a ↔ arrow. Drag to resize. Both sidebars clamp to `[180 px, window_width × 0.45]`, so the canvas can't collapse to zero. Default width is 320 px each.
+
+**Slider modifiers** — every parameter slider supports **Ctrl+click to type an exact value**, **scroll-wheel on hover to step**, **Shift = ×10 step**, **Ctrl = ×0.1 step**. Scroll-wheel over the canvas zooms instead.
 
 Each panel has a **Reset** button to return to its struct defaults — useful for escaping a chaotic corner of parameter space.
 
@@ -264,8 +263,7 @@ The window is resizable down to 640×400; the offscreen render target reallocate
 | `Ctrl+S` | Save preset (quick — to `$XDG_CONFIG_HOME/caustic/presets/` using the Save-name field) |
 | `Ctrl+Shift+S` | Save preset as… (native file dialog) |
 | `Ctrl+O` | Open preset (native file dialog) |
-| `Ctrl+E` | Export SVG (quick — to `$XDG_CONFIG_HOME/caustic/exports/` using the export-name field) |
-| `Ctrl+Shift+E` | Export SVG as… (native file dialog) |
+| `Ctrl+E` | Export image… (native file dialog; uses the current format choice — SVG / PNG / JPEG) |
 | `Ctrl+N` | New preset (resets to defaults) |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo (active in CustomChord and LinearEnvelope editors) |
 | `Ctrl+Shift+Z` | Redo (alternate) |
@@ -320,16 +318,31 @@ Caustic ships with **27 bundled presets** covering every generator and several m
 
 ## Exporting
 
+In the Presets panel (right sidebar), the **Export** section has:
+
+- **format** — choose **SVG (vector)**, **PNG**, or **JPEG**
+- **filename** — file basename, no extension (the dialog appends the right one)
+- **size** — pixel dimensions: width=height. For SVG it's the viewBox; for PNG/JPEG it's the rendered resolution
+- **plotter mode** — SVG-only (greyed out otherwise)
+
+Click **Export…** (or press **`Ctrl+E`**) to open the native file picker. The filter and default extension follow the format choice.
+
 ### SVG
 
-Click **Export SVG** in the Presets panel (or `Ctrl+E`). Output goes to `$XDG_CONFIG_HOME/caustic/exports/` using the export-name field. **Export as…** (`Ctrl+Shift+E`) opens a native file dialog.
-
-Two modes:
+Vector output. Two sub-modes via the plotter checkbox:
 
 - **Coloured** (default) — preserves your style. One `<line>` per chord segment, one `<line>` per polyline segment, one `<circle>` per scatter point. Inkscape opens it cleanly.
-- **Plotter mode** (toggle the checkbox) — strips opacity and stroke variation, emits a single colour (default `#000000`), and sorts chord-set chords lexicographically by start point so a pen plotter can travel between them more efficiently. Polylines emit as a single `<polyline>` (one pen-down per curve).
+- **Plotter mode** — strips opacity and stroke variation, emits a single colour (default `#000000`), and sorts chord-set chords lexicographically by start point so a pen plotter can travel between them more efficiently. Polylines emit as a single `<polyline>` (one pen-down per curve).
 
 Output is **deterministic** — the same preset produces a byte-identical SVG every time.
+
+### PNG
+
+Lossless raster with alpha. Internally Caustic temporarily resizes the live offscreen canvas to your chosen `size`, redraws the scene at full quality, writes the PNG via raylib's `ExportImage`, restores the canvas size, and refreshes the live view. If your scene background has alpha < 1.0, the PNG preserves it (transparent backgrounds work).
+
+### JPEG
+
+Lossy raster, **no alpha** — the scene background fills the image. Smaller files than PNG; ideal for sharing online. Same render-at-export-size pipeline as PNG.
 
 ## Animation
 
@@ -352,7 +365,9 @@ The Animation panel has three bake outputs. All write into `$XDG_CONFIG_HOME/cau
 
 - **Bake SVG sequence** — writes `name_0000.svg`, `name_0001.svg`, … Compose offline with FFmpeg (rasterise first via `rsvg-convert`, then encode).
 - **Bake PNG sequence** — writes PNG frames using the live raylib render path. Honours the current canvas size. If **encode mp4 after PNG** is checked, Caustic will spawn `ffmpeg` (must be on `PATH`) and emit `name.mp4` with the H.264 yuv420p baseline that plays anywhere.
-- **Bake GIF** — encodes a GIF in-process via `msf_gif` (no external tools). Frame interval and bit depth honour the panel sliders.
+- **Bake animated GIF** — encodes a GIF in-process via `msf_gif` (no external tools). Frame interval and bit depth honour the panel sliders.
+
+**Clean up frame files after GIF / mp4 bake** (checkbox, default on) — when a single-file output (GIF, or mp4 from PNG sequence) succeeds, Caustic removes any `<name>_NNNN.svg` / `.png` / `.jpg` intermediates sharing that name prefix in the output folder. This keeps `animations/` from accumulating thousands of frame files across repeated bakes; the GIF / mp4 itself is the deliverable. Turn it off if you want to keep both the frames and the single-file output. The check matches the bake's `_NNNN` pattern exactly, so a file you saved as `animation.svg` (no `_NNNN`) is never touched.
 
 The acceptance demo: modular chord with `k` animated `Linear(2 → 3)` over 60 frames produces a smooth cardioid → nephroid morph.
 
@@ -481,7 +496,9 @@ Preset: `custom_starburst.json`.
 - **Modular chord at k = 1** — every chord is zero-length (point connects to itself). Try k = 2.
 - **CustomChord nails won't line up after reload** — the editor grid round-trips with the preset, but only if you saved it after configuring the grid. Re-save the preset with the grid configured and reopen.
 - **Left-click pans when I want to edit in CustomChord** — make sure the edit mode is not Off. In edit modes, left-click on a target does the edit action; left-click on empty space pans. Use Spacebar+drag if you want to pan inside an edit mode that consumes empty-space clicks (AddNail / Select).
-- **mp4 bake produced no file** — check that `ffmpeg` is on your `PATH`. The PNG sequence still wrote correctly; you can encode it yourself.
+- **mp4 bake produced no file** — check that `ffmpeg` is on your `PATH`. The PNG sequence still wrote correctly; you can encode it yourself. When mp4 encoding fails, the intermediate PNGs are kept so you can salvage them or retry the encode manually.
+- **GIF / mp4 bake deleted my SVG frames** — that's the **clean up frame files after GIF / mp4 bake** checkbox doing its job. It removes per-frame intermediates (`<name>_NNNN.svg/.png/.jpg`) once a single-file output succeeds. Turn it off if you want both. Files without the `_NNNN` suffix are never touched.
+- **JPEG export logs "format not supported"** — raylib's image-export support is build-gated. Caustic enables PNG, JPG, and BMP in its `CMakeLists.txt` via `target_compile_definitions(raylib PRIVATE SUPPORT_FILEFORMAT_JPG=1 SUPPORT_FILEFORMAT_BMP=1)`. If you see the warning, raylib was built without those flags — clean-rebuild the raylib target (`cmake --build build --target raylib --clean-first`).
 - **Exit segfault** — fixed in v1.1; if it returns, check [BUGS.md](BUGS.md) for the renderer-destructor-after-CloseWindow issue.
 
 ## Resources

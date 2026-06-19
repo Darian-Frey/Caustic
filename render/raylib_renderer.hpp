@@ -35,9 +35,11 @@ public:
     // overlay the rest themselves.
     void blit_to_screen(int x_offset = 0, int y_offset = 0) const;
 
-    // Write the offscreen canvas as a PNG to the given path. Used by the
-    // PNG-sequence bake. Returns true on success.
-    bool write_png(const char* path) const;
+    // Write the offscreen canvas to disk. raylib's ExportImage picks the
+    // format from the path's extension — PNG, JPG, BMP, TGA, QOI all work.
+    // Used by the static-image export and the PNG-sequence bake.
+    // Returns true on success.
+    bool write_image(const char* path) const;
 
     // Copy the offscreen canvas into an RGBA buffer (top-to-bottom row order,
     // 4 bytes per pixel). Buffer is allocated by the callee. Caller frees

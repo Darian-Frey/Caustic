@@ -47,6 +47,16 @@ if(CAUSTIC_BUILD_APP)
             GIT_TAG 6.0
         )
         FetchContent_MakeAvailable(raylib)
+
+        # raylib 6.0's config.h enables only PNG by default — the SUPPORT_*
+        # flags for the other formats are commented out. We need JPG (and BMP)
+        # so the static-image export panel can write to those formats. Adding
+        # the macros as compile definitions on raylib's target gets them
+        # defined before raylib's source includes config.h; the commented-out
+        # lines in config.h then don't overwrite them.
+        target_compile_definitions(raylib PRIVATE
+            SUPPORT_FILEFORMAT_JPG=1
+            SUPPORT_FILEFORMAT_BMP=1)
     endif()
 
     # Dear ImGui ships no top-level CMakeLists.txt upstream; we build our own

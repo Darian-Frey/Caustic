@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -262,11 +263,23 @@ struct AppState {
     caustic::anim::AnimationSpec animation;
     char bake_name_buf[64] = "animation";
     bool encode_mp4_after_png = true;  // try `ffmpeg` after a PNG bake
+    // After a single-file bake (GIF; PNG→mp4 when mp4 encodes), wipe the
+    // per-frame intermediates (<prefix>_NNNN.svg / .png / .jpg) in the
+    // output folder so the user is left with just the final file. Default
+    // true: most users want a single .gif / .mp4, not the frame dump.
+    bool clean_bake_intermediates = true;
 
     char save_name_buf[64] = "untitled";
     char export_name_buf[64] = "export";
     bool export_plotter_mode = false;
     int export_size = 1024;
+    // Static-image export format. SVG = vector (resolution-independent + plotter
+    // mode); PNG = lossless raster; JPG = lossy raster with no alpha (background
+    // is filled with the scene background colour). All write through the same
+    // "Export…" button / Ctrl+E shortcut; the native file picker shows a filter
+    // matching the chosen format and appends the right extension.
+    enum class ExportFormat { Svg, Png, Jpg };
+    ExportFormat export_format = ExportFormat::Svg;
     std::string status_message;     // shown briefly after save/load/export/bake
     std::vector<fs::path> bundled_presets;
     std::vector<fs::path> user_presets;
@@ -581,17 +594,77 @@ void export_svg_to_path(AppState& state, const fs::path& path) {
     }
 }
 
-void quick_export_svg(AppState& state) {
-    const fs::path path = user_export_dir() / (std::string(state.export_name_buf) + ".svg");
-    export_svg_to_path(state, path);
+// Raster export — temporarily swaps the live renderer's canvas to the requested
+// export_size, redraws the scene at full quality, writes the file (PNG/JPG/BMP/
+// TGA/QOI via raylib's ExportImage, which deduces format from the extension),
+// restores the original canvas size and marks dirty so the live canvas refreshes
+// next frame.
+void export_raster_to_path(AppState& state,
+                           caustic::RaylibRenderer& renderer,
+                           const fs::path& path) {
+    try {
+        const int orig_w = renderer.width();
+        const int orig_h = renderer.height();
+        const int sz = std::max(64, state.export_size);
+        renderer.resize(sz, sz);
+        renderer.redraw(caustic::build_renderables(state.preset.scene, /*coarse=*/false),
+                        state.preset.scene.background, state.preset.camera);
+        const bool ok = renderer.write_image(path.string().c_str());
+        renderer.resize(orig_w, orig_h);
+        state.dirty = true;
+        state.status_message = ok ? ("exported " + path.string())
+                                  : ("export failed: write_image returned false");
+    } catch (const std::exception& e) {
+        state.status_message = std::string("export failed: ") + e.what();
+    }
 }
 
-void export_as_svg(AppState& state) {
+inline const char* export_extension(AppState::ExportFormat f) {
+    switch (f) {
+        case AppState::ExportFormat::Svg: return "svg";
+        case AppState::ExportFormat::Png: return "png";
+        case AppState::ExportFormat::Jpg: return "jpg";
+    }
+    return "svg";
+}
+
+inline const char* export_filter_label(AppState::ExportFormat f) {
+    switch (f) {
+        case AppState::ExportFormat::Svg: return "SVG (*.svg)";
+        case AppState::ExportFormat::Png: return "PNG (*.png)";
+        case AppState::ExportFormat::Jpg: return "JPEG (*.jpg)";
+    }
+    return "SVG (*.svg)";
+}
+
+inline const char* export_filter_pattern(AppState::ExportFormat f) {
+    switch (f) {
+        case AppState::ExportFormat::Svg: return "*.svg";
+        case AppState::ExportFormat::Png: return "*.png";
+        case AppState::ExportFormat::Jpg: return "*.jpg";
+    }
+    return "*.svg";
+}
+
+void export_image_as(AppState& state, caustic::RaylibRenderer& renderer) {
+    const std::string ext = export_extension(state.export_format);
     const fs::path chosen = pick_save_file(
         user_export_dir(),
-        std::string(state.export_name_buf) + ".svg",
-        "SVG (*.svg)", "*.svg");
-    if (!chosen.empty()) export_svg_to_path(state, chosen);
+        std::string(state.export_name_buf) + "." + ext,
+        export_filter_label(state.export_format),
+        export_filter_pattern(state.export_format));
+    if (chosen.empty()) return;
+    // Ensure the chosen path has the right extension — some file pickers
+    // hand back exactly what the user typed and don't auto-append.
+    fs::path final_path = chosen;
+    if (final_path.extension() != fs::path("." + ext)) {
+        final_path += ("." + ext);
+    }
+    if (state.export_format == AppState::ExportFormat::Svg) {
+        export_svg_to_path(state, final_path);
+    } else {
+        export_raster_to_path(state, renderer, final_path);
+    }
 }
 
 void reset_preset_to_default(AppState& state) {
@@ -1366,6 +1439,42 @@ fs::path user_animation_dir() {
     return caustic::user_preset_dir().parent_path() / "animations";
 }
 
+// Delete per-frame intermediate files left in `dir` matching the pattern
+// `<name>_NNNN.<ext>` for ext in {svg, png, jpg}. Used to tidy up after a
+// single-file bake (GIF; mp4 from PNG sequence) so the user is left with
+// just the final output. Returns the number of files removed. Files that
+// don't match the pattern (including the single-file output itself —
+// `<name>.gif`, `<name>.mp4` — and anything the user might have stashed in
+// the same folder) are untouched.
+int clean_intermediate_frames(const fs::path& dir, const std::string& name_prefix) {
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) return 0;
+    const std::string prefix = name_prefix + "_";
+    int removed = 0;
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        const fs::path p = entry.path();
+        const std::string ext = p.extension().string();
+        if (ext != ".svg" && ext != ".png" && ext != ".jpg") continue;
+        const std::string stem = p.stem().string();
+        if (stem.size() < prefix.size() + 1) continue;
+        if (stem.compare(0, prefix.size(), prefix) != 0) continue;
+        // The chars between the prefix and the dot must all be digits — the
+        // bake format is `%s_%04d.<ext>`. Bare `<name>.<ext>` (e.g. the user's
+        // own preset.svg sitting in the folder) is rejected because it has
+        // no underscore + digits suffix.
+        const std::string num = stem.substr(prefix.size());
+        const bool all_digits = !num.empty() &&
+            std::all_of(num.begin(), num.end(),
+                        [](unsigned char c) { return std::isdigit(c) != 0; });
+        if (!all_digits) continue;
+        std::error_code rm_ec;
+        fs::remove(p, rm_ec);
+        if (!rm_ec) ++removed;
+    }
+    return removed;
+}
+
 void render_animation_panel_content(AppState& state, caustic::RaylibRenderer& renderer) {
     auto& anim = state.animation;
 
@@ -1564,7 +1673,7 @@ void render_animation_panel_content(AppState& state, caustic::RaylibRenderer& re
                                 frame.scene.background, frame.camera);
                 char buf[80];
                 std::snprintf(buf, sizeof(buf), "%s_%04d.png", state.bake_name_buf, i);
-                renderer.write_png((dir / buf).string().c_str());
+                renderer.write_image((dir / buf).string().c_str());
             }
             renderer.resize(orig_w, orig_h);
             state.dirty = true;  // re-render the live canvas next frame
@@ -1584,6 +1693,11 @@ void render_animation_panel_content(AppState& state, caustic::RaylibRenderer& re
                 const int rc = std::system(cmd.str().c_str());
                 if (rc == 0) {
                     status += "; encoded " + mp4.filename().string();
+                    if (state.clean_bake_intermediates) {
+                        const int n = clean_intermediate_frames(dir, state.bake_name_buf);
+                        if (n > 0) status += "; cleaned " + std::to_string(n)
+                                             + " intermediate frame" + (n == 1 ? "" : "s");
+                    }
                 } else {
                     status += "; ffmpeg encode failed (is `ffmpeg` on PATH?)";
                 }
@@ -1641,18 +1755,32 @@ void render_animation_panel_content(AppState& state, caustic::RaylibRenderer& re
             }
 
             MsfGifResult result = msf_gif_end(&gif);
+            bool wrote = false;
             if (result.data) {
                 std::ofstream out(path, std::ios::binary);
                 out.write(static_cast<const char*>(result.data),
                           static_cast<std::streamsize>(result.dataSize));
+                wrote = out.good();
             }
             msf_gif_free(result);
 
             renderer.resize(orig_w, orig_h);
             state.dirty = true;
 
-            state.status_message = "baked " + std::to_string(frames) +
-                                   " GIF frames to " + path.string();
+            std::string status = "baked " + std::to_string(frames) +
+                                 " GIF frames to " + path.string();
+            // Clean per-frame SVG / PNG / JPG intermediates left in the GIF's
+            // folder from a previous Bake SVG-sequence or Bake PNG-sequence
+            // run with the same name prefix. The single-file GIF makes them
+            // redundant; users who want both should turn the option off.
+            if (wrote && state.clean_bake_intermediates) {
+                const fs::path dir = path.has_parent_path()
+                                       ? path.parent_path() : fs::current_path();
+                const int n = clean_intermediate_frames(dir, state.bake_name_buf);
+                if (n > 0) status += "; cleaned " + std::to_string(n)
+                                     + " intermediate frame" + (n == 1 ? "" : "s");
+            }
+            state.status_message = status;
         } catch (const std::exception& e) {
             state.status_message = std::string("GIF bake failed: ") + e.what();
         }
@@ -1672,12 +1800,19 @@ void render_animation_panel_content(AppState& state, caustic::RaylibRenderer& re
         if (!chosen.empty()) do_bake_gif(chosen);
     }
 
+    ImGui::Separator();
+    ImGui::Checkbox("clean up frame files after GIF / mp4 bake",
+                    &state.clean_bake_intermediates);
+    ImGui::TextDisabled("Removes <name>_NNNN.svg / .png / .jpg in the output folder "
+                        "once the single-file bake succeeds.");
+
     if (!state.status_message.empty()) {
         ImGui::TextDisabled("%s", state.status_message.c_str());
     }
 }
 
 void render_preset_panel_content(AppState& state,
+                                 caustic::RaylibRenderer& renderer,
                                  caustic::RaylibRenderer& thumb_renderer,
                                  ThumbnailCache& thumbs) {
     // Save section. Quick "Save" writes to the default XDG dir using the
@@ -1732,16 +1867,33 @@ void render_preset_panel_content(AppState& state,
     if (ImGui::Button("Refresh")) { refresh_preset_lists(state); thumbs.clear(); }
 
     ImGui::Separator();
-    ImGui::Text("Export SVG");
+    ImGui::Text("Export");
+    {
+        static const char* const kExportFormatNames[] = {"SVG (vector)", "PNG", "JPEG"};
+        int fmt = static_cast<int>(state.export_format);
+        if (ImGui::Combo("format", &fmt, kExportFormatNames, IM_ARRAYSIZE(kExportFormatNames))) {
+            state.export_format = static_cast<AppState::ExportFormat>(fmt);
+        }
+    }
     ImGui::PushItemWidth(180);
     ImGui::InputText("filename", state.export_name_buf, sizeof(state.export_name_buf));
     ImGui::PopItemWidth();
     ImGui::SliderInt("size", &state.export_size, 256, 4096);
-    ImGui::Checkbox("plotter mode", &state.export_plotter_mode);
-    ImGui::SameLine();
-    ImGui::TextDisabled("(single colour, no opacity, sorted)");
+    // Plotter mode is SVG-specific (pen-plotter convention: single colour, no
+    // opacity, lexicographically-sorted chord order). Grey it out for raster.
+    {
+        const bool svg = (state.export_format == AppState::ExportFormat::Svg);
+        ImGui::BeginDisabled(!svg);
+        ImGui::Checkbox("plotter mode", &state.export_plotter_mode);
+        ImGui::SameLine();
+        ImGui::TextDisabled("(SVG only — single colour, no opacity, sorted)");
+        ImGui::EndDisabled();
+    }
+    if (state.export_format == AppState::ExportFormat::Jpg) {
+        ImGui::TextDisabled("JPEG has no alpha — the scene background fills it.");
+    }
 
-    if (ImGui::Button("Export SVG…")) export_as_svg(state);
+    if (ImGui::Button("Export…")) export_image_as(state, renderer);
 
     ImGui::TextDisabled("Shortcuts: Ctrl+S save  Ctrl+Shift+S save as  Ctrl+O open  Ctrl+E export…  Ctrl+N new");
 }
@@ -1831,7 +1983,7 @@ void render_right_sidebar(AppState& state, float window_w, float width,
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Presets")) {
-            render_preset_panel_content(state, thumb_renderer, thumbs);
+            render_preset_panel_content(state, renderer, thumb_renderer, thumbs);
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Animation")) {
@@ -2364,7 +2516,7 @@ int main() {
                     else       quick_save_preset(state, &thumbs);
                 }
                 if (IsKeyPressed(KEY_O)) open_preset_dialog(state);
-                if (IsKeyPressed(KEY_E)) export_as_svg(state);
+                if (IsKeyPressed(KEY_E)) export_image_as(state, renderer);
                 if (IsKeyPressed(KEY_N)) reset_preset_to_default(state);
             }
 

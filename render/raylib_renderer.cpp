@@ -215,7 +215,7 @@ void RaylibRenderer::blit_to_screen(int x_offset, int y_offset) const {
     DrawTexturePro(canvas_.texture, src, dst, {0.0f, 0.0f}, 0.0f, ::Color{255, 255, 255, 255});
 }
 
-bool RaylibRenderer::write_png(const char* path) const {
+bool RaylibRenderer::write_image(const char* path) const {
     Image img = LoadImageFromTexture(canvas_.texture);
     // RenderTexture pixels come out bottom-up; flip so the saved image is
     // right-way-up.

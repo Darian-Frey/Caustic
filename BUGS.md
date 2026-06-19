@@ -6,6 +6,36 @@ The goal is to keep this file useful when something breaks unexpectedly — sear
 
 ---
 
+## 2026-05-18 — JPEG export writes nothing, raylib logs "Export image format requested not supported"
+
+**Symptom:** After the Export panel learned about PNG and JPEG via `RaylibRenderer::write_image` (which calls raylib's `ExportImage`, format inferred from the path's extension), PNG worked fine but JPEG silently failed. Console showed `WARNING: IMAGE: Export image format requested not supported` and `WARNING: FILEIO: [.../test.jpg] Failed to export image` for every JPEG attempt.
+
+**Root cause:** raylib's `ExportImage` is **gated by build-time flags** — it only handles the formats whose `SUPPORT_FILEFORMAT_*` macro is defined when `rtextures.c` is compiled. raylib 6.0's `config.h` enables **only PNG** by default; every other format (JPG, BMP, TGA, GIF, QOI, …) ships with its define **commented out**:
+
+```c
+#define SUPPORT_FILEFORMAT_PNG      1
+//#define SUPPORT_FILEFORMAT_JPG    1
+//#define SUPPORT_FILEFORMAT_BMP    1
+```
+
+`ExportImage` dispatches on extension and falls through to the warning when the requested format wasn't compiled in. Our code path looked correct; the library just couldn't honour it.
+
+**Fix:** Pre-define the macros on the raylib target before its sources are compiled. In `CMakeLists.txt`, right after `FetchContent_MakeAvailable(raylib)`:
+
+```cmake
+target_compile_definitions(raylib PRIVATE
+    SUPPORT_FILEFORMAT_JPG=1
+    SUPPORT_FILEFORMAT_BMP=1)
+```
+
+The compile-time defines arrive before raylib's `config.h` is processed; the commented-out lines in `config.h` don't undefine them, so the `#if defined(SUPPORT_FILEFORMAT_JPG)` blocks compile in. Then `cmake -B build` + a `--clean-first` rebuild of the raylib target picks them up (incremental builds won't — raylib's `.o` files are already cached). General rule for raylib: if `ExportImage` / `LoadImage` silently refuses a format you "thought it supports," check the `SUPPORT_FILEFORMAT_*` matrix in raylib's `config.h` first.
+
+**Files:** `CMakeLists.txt`.
+
+**Phase:** v1.1 polish (multi-format export).
+
+---
+
 ## 2026-05-18 — Sidebar hint text disappears past the right edge of the panel
 
 **Symptom:** After the layout refactor to 320 px-wide sidebars, the `TextDisabled` hint blocks in the CustomChord and Parameters panels (e.g. "add nail: left-click on canvas drops a nail", "scroll wheel on slider: ± step  Shift: ×10  Ctrl: ×0.1", "keys 1-4: switch generator  F or 0: reset camera") got chopped at the panel edge — only the leading portion was visible. A couple of long button labels ("Clear chord colours (use style colormap)") and checkbox labels ("plotter mode (single colour, no opacity, sorted)") were similarly clipped.

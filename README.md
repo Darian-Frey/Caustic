@@ -1,7 +1,7 @@
 > **Status:** Active — v1.1 feature-complete, polish & release pending
 > **Provenance:** Shane Hartley (Darian-Frey, primary author); Claude (architect, implementation assistant, doc scaffolding)
 > **Last reviewed:** 2026-05-18
-> **Why this status:** Phases 0–11 closed plus v1.1 polish (extra generators, scatter attractors, LinearEnvelope drag editor, Keyframed envelope, PNG/GIF/mp4 bake, CustomChord editor, polar grid, per-chord stroke, preset thumbnails, universal pan, keyboard shortcuts). 17 generators across three pipeline tiers; multi-layer scenes; animation system; SVG/PNG/GIF/mp4 export; headless CLI. Only Phase 12 (README screenshots, license, Windows cross-compile, itch.io page) remains for the public 1.0.
+> **Why this status:** Phases 0–11 closed plus v1.1 polish (extra generators, scatter attractors, LinearEnvelope drag editor, Keyframed envelope, PNG/GIF/mp4 bake, CustomChord editor, polar grid, per-chord stroke, preset thumbnails, universal pan, keyboard shortcuts, IDE-style draggable-sidebar layout, multi-format static export). 17 generators across three pipeline tiers; multi-layer scenes; animation system; SVG/PNG/JPEG static export plus SVG/PNG-sequence/GIF/mp4 animation bake; headless CLI. Only Phase 12 (README screenshots, license, Windows cross-compile, itch.io page) remains for the public 1.0.
 
 # Caustic
 
@@ -52,6 +52,7 @@ Seventeen generators across three pipeline tiers. All produce math-up world coor
 
 ## Features
 
+- **IDE-style three-pane layout** — left sidebar (Parameters + Style tabs), centered canvas, right sidebar (Layers + Presets + Animation tabs). Both sidebars are draggable via thin splitter strips; widths clamp so the canvas can't collapse. Defaults to 320 px sidebars.
 - **Multi-layer scenes** with per-layer transform (translate / rotate / scale / mirror) and visibility toggle.
 - **Array tools** — rotational, grid, mirror-reflect — produce N concrete layers from a seed layer with one click.
 - **Style system** — solid / linear-gradient / HSV-sweep / diverging colour maps, four indexers (chord index, length, angle, curve t), variable stroke width, opacity, cyclic-curve continuity flag.
@@ -59,9 +60,9 @@ Seventeen generators across three pipeline tiers. All produce math-up world coor
 - **Camera** — middle-click drag pan, **Spacebar + left-drag** universal pan, smart left-drag pan (works on empty space even inside the CustomChord and LinearEnvelope editors), scroll-zoom, F or 0 reset, F11 fullscreen.
 - **Preset browser** with thumbnails (lazily rendered 96×96 previews). 27 bundled presets covering every generator family. Native file dialogs for save/open/export anywhere on disk; XDG default dir at `$XDG_CONFIG_HOME/caustic/presets/`. Editor grid state (mode, spacing, polar spokes) round-trips with the preset.
 - **Animation system** — `Static` / `Linear` / `Sine` / `Keyframed` envelopes driving 29 animatable parameters (generator coefficients, layer transforms, camera zoom).
-- **Frame bake** — numbered SVG sequence, PNG sequence, GIF (in-process via `msf_gif`), or mp4 (via `ffmpeg` if available on PATH).
-- **SVG export** with plotter mode (single colour, no opacity, sorted chords as one pen-down per curve).
-- **Keyboard shortcuts** — Ctrl+S save, Ctrl+Shift+S save as, Ctrl+O open, Ctrl+E export SVG, Ctrl+Shift+E export as, Ctrl+N new, Ctrl+Z / Ctrl+Y undo/redo in the editors, 1–4 quick-switch generator, F or 0 reset camera, F11 fullscreen.
+- **Frame bake** — numbered SVG sequence, PNG sequence, GIF (in-process via `msf_gif`), or mp4 (via `ffmpeg` if available on PATH). Default-on cleanup removes per-frame intermediates after a successful single-file bake.
+- **Static-image export** — **SVG** (vector, with plotter mode = single colour / no opacity / sorted chords as one pen-down per curve), **PNG** (lossless raster with alpha preserved), or **JPEG** (lossy raster, scene background fills the alpha). Renders at the user-chosen pixel size.
+- **Keyboard shortcuts** — Ctrl+S save, Ctrl+Shift+S save as, Ctrl+O open, Ctrl+E export (file dialog, uses the current format choice), Ctrl+N new, Ctrl+Z / Ctrl+Y undo/redo in the editors, 1–4 quick-switch generator, F or 0 reset camera, F11 fullscreen, Spacebar+drag universal pan.
 - **Headless CLI** — `caustic-cli preset.json -o out.svg` for batch/scripted use. Exit codes match `SPEC.md §5`.
 
 ## Build requirements
