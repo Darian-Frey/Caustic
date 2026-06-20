@@ -1,6 +1,6 @@
 # Caustic — User Manual
 
-> **Status:** v1.1 + Phase 13.1–13.3 — covers all features through v1.1 polish plus the "Surprise me" randomiser, shareable preset URLs, and direct G-code / HPGL plotter output
+> **Status:** v1.1 + Phase 13.1–13.4 — covers all features through v1.1 polish plus the "Surprise me" randomiser, shareable preset URLs, direct G-code / HPGL plotter output, and image trace → CustomChord
 > **Last reviewed:** 2026-06-20
 
 A practical guide to driving Caustic — what each control does, what each generator produces, and how to compose common string-art patterns.
@@ -197,6 +197,31 @@ The grid state (mode, spacing, polar spokes, visible, snap) **is saved with the 
 
 - **Delete last nail** / **Delete last chord** — quick undo without entering Select mode
 - **Clear all** — wipe nails + chords (undoable)
+
+### Image trace
+
+Drop a PNG / JPEG / BMP and Caustic lays nails on the strongest edges, then connects them with the rule of your choice. This is the angle that distinguishes Caustic from photo-string-art tools: the output is a normal CustomChord layer you can keep editing in the nail editor, not a peg-board build script.
+
+Knobs in the panel (above the **Import image…** button):
+
+- **max nails** (10–500) — hard cap on the number of nails emitted. The stratified pass may produce fewer if many cells fail the edge threshold.
+- **grid divisions** (4–32) — image is split into `N × N` cells; one nail per cell at most. Keep `grid divisions ≈ √max nails` to avoid most cells being culled.
+- **edge threshold** (0–255) — Sobel magnitude cutoff. Higher = pickier; tune this down if you're getting too few nails from a soft-edged photo.
+- **chord rule** — **modular** (chord *i* → `round(k·i) mod N`, classic string-art), **sequential** (chord *i* → *i*+1, edge-polyline trace), or **nearest** (each nail to its *k* nearest neighbours, undirected pairs de-duplicated).
+- **modular k** or **nearest k** — appears conditionally depending on the rule.
+
+Pipeline detail (for users debugging an unexpected trace):
+
+1. raylib loads the file. Very large images (> 1024 px on the long side) are auto-downscaled to keep the Sobel pass under a second on a typical CPU; you lose nothing visually because 1024 long-side already has plenty of edge detail.
+2. Convert to grayscale (one luminance byte per pixel).
+3. Run Sobel `|Gx| + |Gy|` magnitude.
+4. Stratified sample: one strongest pixel per grid cell above `edge threshold`.
+5. If still more than `max nails`, keep the strongest by magnitude.
+6. Stable scan-line sort (top-to-bottom, then left-to-right) so chord rules produce predictable patterns.
+7. Pixel coords → math-up world coords in `[-1, 1]` with aspect ratio preserved.
+8. Build chord pairs per rule.
+
+The import pushes the current CustomChord layer onto the undo stack first — `Ctrl+Z` rescues a bad trace. The status bar reports `imported N nails / M chords from <filename>`.
 
 ## The LinearEnvelope drag editor
 
@@ -550,6 +575,17 @@ Preset: `maurer_rose_classic.json`.
 4. Switch to **add chord** mode and connect them. Pick start/end colours in the panel — start = end is a solid colour; different colours produce a gradient along the chord.
 5. Use Ctrl+Z if you misclick; **move nail** mode to reposition existing nails; **right-click** to erase.
 6. Save the preset — the grid settings round-trip, so when you reopen it the nails still align.
+
+### Trace a photo into string art
+
+1. Pick `CustomChord` as the generator.
+2. In the **Image trace** section, start with the defaults (`max nails = 100`, `grid divisions = 12`, `edge threshold = 60`, `chord rule = modular`, `modular k = 2`).
+3. Click **Import image…** and pick a high-contrast PNG / JPEG. Portraits and silhouettes work best — soft-edged photos may need a lower `edge threshold` (try 30–40).
+4. If too few nails appear, lower `edge threshold` or raise `grid divisions`. If too many cluster in one region, raise `grid divisions` to spread them.
+5. Try the other rules — `sequential` traces the outline as a polyline (great for line drawings); `nearest k=2` produces a wireframe-like effect.
+6. The result is a regular CustomChord layer — switch to **add nail** / **add chord** / **move nail** / **recolour chord** modes and refine by hand. **Ctrl+Z** rescues any bad trace.
+
+The trace finds Sobel edges in pixel space; very large images auto-downscale to 1024 px on the long side to keep the operation snappy.
 
 Preset: `custom_starburst.json`.
 

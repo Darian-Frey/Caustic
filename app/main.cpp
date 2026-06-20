@@ -21,6 +21,7 @@
 #include <caustic/envelope.hpp>
 #include <caustic/geometry_buffer.hpp>
 #include <caustic/geometry_factory.hpp>
+#include <caustic/image_trace.hpp>
 #include <caustic/preset.hpp>
 #include <caustic/preset_io.hpp>
 #include <caustic/preset_url.hpp>
@@ -348,6 +349,17 @@ struct AppState {
     double nail_active_opacity = 0.6;
     static constexpr double nail_default_width   = 0.8;
     static constexpr double nail_default_opacity = 0.6;
+
+    // Image-trace options — applied when the user clicks "Import image…" in
+    // the CustomChord panel. Defaults match caustic::ImageTraceOptions so the
+    // panel sliders start out sensible. Persist between imports so a user can
+    // tweak one knob and re-import the same image.
+    int    trace_max_nails      = 100;
+    int    trace_edge_threshold = 60;
+    int    trace_grid_divisions = 12;
+    int    trace_chord_rule     = 0;   // 0 Modular, 1 Sequential, 2 Nearest
+    double trace_modular_k      = 2.0;
+    int    trace_nearest_k      = 2;
 
     // Undo/redo for the *current layer's* CustomChordParams only. Snapshot-
     // based: every atomic edit (add nail, add chord, delete, recolour, clear)
@@ -1093,6 +1105,69 @@ void render_param_panel_content(AppState& state) {
                 state.selected_chords.clear();
                 state.dirty = true;
             }
+
+            ImGui::Separator();
+            ImGui::TextDisabled("Image trace");
+            slider_int_w("max nails",      &state.trace_max_nails,      10,  500);
+            slider_int_w("grid divisions", &state.trace_grid_divisions,  4,   32);
+            slider_int_w("edge threshold", &state.trace_edge_threshold,  0,  255);
+            {
+                static const char* const kRuleNames[] = {"modular", "sequential", "nearest"};
+                ImGui::Combo("chord rule", &state.trace_chord_rule, kRuleNames, IM_ARRAYSIZE(kRuleNames));
+            }
+            if (state.trace_chord_rule == 0) {
+                slider_double_w("modular k", &state.trace_modular_k, 0.0, 100.0, 0.01);
+            } else if (state.trace_chord_rule == 2) {
+                slider_int_w("nearest k", &state.trace_nearest_k, 1, 8);
+            }
+            if (ImGui::Button("Import image…")) {
+                const fs::path chosen = pick_open_file(
+                    caustic::user_preset_dir(),
+                    "Image (PNG / JPEG / BMP)", "*.png *.jpg *.jpeg *.bmp");
+                if (!chosen.empty()) {
+                    Image img = LoadImage(chosen.string().c_str());
+                    if (img.data == nullptr || img.width < 3 || img.height < 3) {
+                        state.status_message = "failed to load image: " + chosen.string();
+                        if (img.data) UnloadImage(img);
+                    } else {
+                        // Down-scale runaway-large images so the Sobel pass
+                        // stays under a second on a typical CPU. 1024 on the
+                        // long side preserves plenty of edge detail.
+                        constexpr int kMaxDim = 1024;
+                        const int max_side = std::max(img.width, img.height);
+                        if (max_side > kMaxDim) {
+                            const double s = static_cast<double>(kMaxDim) / max_side;
+                            ImageResize(&img,
+                                static_cast<int>(img.width  * s),
+                                static_cast<int>(img.height * s));
+                        }
+                        ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_GRAYSCALE);
+                        caustic::ImageTraceOptions opts;
+                        opts.max_nails      = state.trace_max_nails;
+                        opts.grid_divisions = state.trace_grid_divisions;
+                        opts.edge_threshold = state.trace_edge_threshold;
+                        opts.rule = static_cast<caustic::TraceChordRule>(state.trace_chord_rule);
+                        opts.modular_k = state.trace_modular_k;
+                        opts.nearest_k = state.trace_nearest_k;
+                        const auto traced = caustic::image_trace(
+                            img.width, img.height,
+                            static_cast<const std::uint8_t*>(img.data), opts);
+                        UnloadImage(img);
+                        push_undo();
+                        c = traced;
+                        state.nail_chord_first = -1;
+                        state.selected_nails.clear();
+                        state.selected_chords.clear();
+                        state.status_message =
+                            "imported " + std::to_string(c.nails.size())  + " nails / " +
+                            std::to_string(c.chords.size()) + " chords from " +
+                            chosen.filename().string();
+                        state.dirty = true;
+                    }
+                }
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(replaces current layer)");
 
             // Selection summary + actions (Select mode).
             if (!state.selected_nails.empty() || !state.selected_chords.empty()) {

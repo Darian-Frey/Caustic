@@ -25,6 +25,7 @@ add_executable(test_caustic
     test_randomize.cpp
     test_preset_url.cpp
     test_plotter_renderer.cpp
+    test_image_trace.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
