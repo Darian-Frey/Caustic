@@ -23,6 +23,7 @@
 #include <caustic/geometry_factory.hpp>
 #include <caustic/preset.hpp>
 #include <caustic/preset_io.hpp>
+#include <caustic/preset_url.hpp>
 #include <caustic/randomize.hpp>
 #include <caustic/scene_render.hpp>
 #include <caustic/style.hpp>
@@ -1861,6 +1862,39 @@ void render_preset_panel_content(AppState& state,
 
     if (ImGui::Button("Open…")) open_preset_dialog(state);
     ImGui::SameLine();
+    if (ImGui::Button("Copy URL")) {
+        try {
+            const std::string url = caustic::encode_preset_url(state.preset);
+            SetClipboardText(url.c_str());
+            state.status_message = "copied preset URL (" +
+                                   std::to_string(url.size()) + " chars) to clipboard";
+        } catch (const std::exception& e) {
+            state.status_message = std::string("copy failed: ") + e.what();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Paste URL")) {
+        const char* clip = GetClipboardText();
+        if (!clip || !*clip) {
+            state.status_message = "clipboard is empty";
+        } else if (!caustic::is_preset_url(clip)) {
+            state.status_message = "clipboard text is not a caustic preset URL "
+                                   "(expects 'caustic:p1:' prefix)";
+        } else {
+            try {
+                state.preset = caustic::decode_preset_url(clip);
+                std::strncpy(state.save_name_buf, state.preset.name.c_str(),
+                             sizeof(state.save_name_buf) - 1);
+                state.save_name_buf[sizeof(state.save_name_buf) - 1] = '\0';
+                state.status_message = "loaded preset from URL";
+                state.dirty = true;
+            } catch (const std::exception& e) {
+                state.status_message = std::string("paste failed: ") + e.what();
+            }
+        }
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(share via chat)");
 
     auto render_list = [&](const char* heading, const std::vector<fs::path>& paths) {
         if (ImGui::CollapsingHeader(heading, ImGuiTreeNodeFlags_DefaultOpen)) {

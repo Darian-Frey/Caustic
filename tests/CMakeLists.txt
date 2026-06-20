@@ -23,6 +23,7 @@ add_executable(test_caustic
     test_custom_chord.cpp
     test_hybrids.cpp
     test_randomize.cpp
+    test_preset_url.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
