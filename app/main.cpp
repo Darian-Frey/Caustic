@@ -29,6 +29,7 @@
 #include <caustic/style.hpp>
 #include <caustic/style_factory.hpp>
 
+#include "plotter_renderer.hpp"
 #include "raylib_renderer.hpp"
 #include "svg_renderer.hpp"
 
@@ -281,8 +282,19 @@ struct AppState {
     // is filled with the scene background colour). All write through the same
     // "Export…" button / Ctrl+E shortcut; the native file picker shows a filter
     // matching the chosen format and appends the right extension.
-    enum class ExportFormat { Svg, Png, Jpg };
+    enum class ExportFormat { Svg, Png, Jpg, Gcode, Hpgl };
     ExportFormat export_format = ExportFormat::Svg;
+
+    // Plotter (G-code / HPGL) options — mirrored from caustic::PlotterOptions
+    // defaults. Surfaced in the Export panel when the format is Gcode or Hpgl.
+    double plotter_page_width_mm   =  200.0;
+    double plotter_page_height_mm  =  200.0;
+    double plotter_pen_up_z        =    5.0;
+    double plotter_pen_down_z      =    0.0;
+    double plotter_travel_feedrate = 6000.0;
+    double plotter_draw_feedrate   = 3000.0;
+    double plotter_plunge_feedrate = 1500.0;
+    int    plotter_pen_number      =    1;
     std::string status_message;     // shown briefly after save/load/export/bake
     std::vector<fs::path> bundled_presets;
     std::vector<fs::path> user_presets;
@@ -624,27 +636,33 @@ void export_raster_to_path(AppState& state,
 
 inline const char* export_extension(AppState::ExportFormat f) {
     switch (f) {
-        case AppState::ExportFormat::Svg: return "svg";
-        case AppState::ExportFormat::Png: return "png";
-        case AppState::ExportFormat::Jpg: return "jpg";
+        case AppState::ExportFormat::Svg:   return "svg";
+        case AppState::ExportFormat::Png:   return "png";
+        case AppState::ExportFormat::Jpg:   return "jpg";
+        case AppState::ExportFormat::Gcode: return "gcode";
+        case AppState::ExportFormat::Hpgl:  return "hpgl";
     }
     return "svg";
 }
 
 inline const char* export_filter_label(AppState::ExportFormat f) {
     switch (f) {
-        case AppState::ExportFormat::Svg: return "SVG (*.svg)";
-        case AppState::ExportFormat::Png: return "PNG (*.png)";
-        case AppState::ExportFormat::Jpg: return "JPEG (*.jpg)";
+        case AppState::ExportFormat::Svg:   return "SVG (*.svg)";
+        case AppState::ExportFormat::Png:   return "PNG (*.png)";
+        case AppState::ExportFormat::Jpg:   return "JPEG (*.jpg)";
+        case AppState::ExportFormat::Gcode: return "G-code (*.gcode)";
+        case AppState::ExportFormat::Hpgl:  return "HPGL (*.hpgl)";
     }
     return "SVG (*.svg)";
 }
 
 inline const char* export_filter_pattern(AppState::ExportFormat f) {
     switch (f) {
-        case AppState::ExportFormat::Svg: return "*.svg";
-        case AppState::ExportFormat::Png: return "*.png";
-        case AppState::ExportFormat::Jpg: return "*.jpg";
+        case AppState::ExportFormat::Svg:   return "*.svg";
+        case AppState::ExportFormat::Png:   return "*.png";
+        case AppState::ExportFormat::Jpg:   return "*.jpg";
+        case AppState::ExportFormat::Gcode: return "*.gcode";
+        case AppState::ExportFormat::Hpgl:  return "*.hpgl";
     }
     return "*.svg";
 }
@@ -663,10 +681,46 @@ void export_image_as(AppState& state, caustic::RaylibRenderer& renderer) {
     if (final_path.extension() != fs::path("." + ext)) {
         final_path += ("." + ext);
     }
-    if (state.export_format == AppState::ExportFormat::Svg) {
-        export_svg_to_path(state, final_path);
-    } else {
-        export_raster_to_path(state, renderer, final_path);
+    try {
+        switch (state.export_format) {
+            case AppState::ExportFormat::Svg:
+                export_svg_to_path(state, final_path);
+                break;
+            case AppState::ExportFormat::Png:
+            case AppState::ExportFormat::Jpg:
+                export_raster_to_path(state, renderer, final_path);
+                break;
+            case AppState::ExportFormat::Gcode: {
+                caustic::PlotterOptions opts;
+                opts.width_mm        = state.plotter_page_width_mm;
+                opts.height_mm       = state.plotter_page_height_mm;
+                opts.margin          = 0.05;
+                opts.pen_up_z        = state.plotter_pen_up_z;
+                opts.pen_down_z      = state.plotter_pen_down_z;
+                opts.travel_feedrate = state.plotter_travel_feedrate;
+                opts.draw_feedrate   = state.plotter_draw_feedrate;
+                opts.plunge_feedrate = state.plotter_plunge_feedrate;
+                caustic::write_gcode(final_path,
+                    caustic::build_renderables(state.preset.scene, /*coarse=*/false),
+                    opts);
+                state.status_message = "exported " + final_path.string();
+                break;
+            }
+            case AppState::ExportFormat::Hpgl: {
+                caustic::PlotterOptions opts;
+                opts.width_mm   = state.plotter_page_width_mm;
+                opts.height_mm  = state.plotter_page_height_mm;
+                opts.margin     = 0.05;
+                opts.pen_number = state.plotter_pen_number;
+                caustic::write_hpgl(final_path,
+                    caustic::build_renderables(state.preset.scene, /*coarse=*/false),
+                    opts);
+                state.status_message = "exported " + final_path.string();
+                break;
+            }
+        }
+    } catch (const std::exception& e) {
+        state.status_message = std::string("export failed: ") + e.what();
     }
 }
 
@@ -1928,7 +1982,10 @@ void render_preset_panel_content(AppState& state,
     ImGui::Separator();
     ImGui::Text("Export");
     {
-        static const char* const kExportFormatNames[] = {"SVG (vector)", "PNG", "JPEG"};
+        static const char* const kExportFormatNames[] = {
+            "SVG (vector)", "PNG", "JPEG",
+            "G-code (plotter)", "HPGL (plotter)",
+        };
         int fmt = static_cast<int>(state.export_format);
         if (ImGui::Combo("format", &fmt, kExportFormatNames, IM_ARRAYSIZE(kExportFormatNames))) {
             state.export_format = static_cast<AppState::ExportFormat>(fmt);
@@ -1937,12 +1994,22 @@ void render_preset_panel_content(AppState& state,
     ImGui::PushItemWidth(180);
     ImGui::InputText("filename", state.export_name_buf, sizeof(state.export_name_buf));
     ImGui::PopItemWidth();
-    ImGui::SliderInt("size", &state.export_size, 256, 4096);
-    // Plotter mode is SVG-specific (pen-plotter convention: single colour, no
-    // opacity, lexicographically-sorted chord order). Grey it out for raster.
+
+    const bool is_svg     = (state.export_format == AppState::ExportFormat::Svg);
+    const bool is_raster  = (state.export_format == AppState::ExportFormat::Png ||
+                              state.export_format == AppState::ExportFormat::Jpg);
+    const bool is_gcode   = (state.export_format == AppState::ExportFormat::Gcode);
+    const bool is_hpgl    = (state.export_format == AppState::ExportFormat::Hpgl);
+    const bool is_plotter = is_gcode || is_hpgl;
+
+    // SVG / raster: pixel size matters. Plotter formats render fit-to-page
+    // in mm so the size slider doesn't apply.
+    if (is_svg || is_raster) {
+        ImGui::SliderInt("size", &state.export_size, 256, 4096);
+    }
+    // Plotter-mode checkbox is SVG-only (pen-plotter SVG convention).
     {
-        const bool svg = (state.export_format == AppState::ExportFormat::Svg);
-        ImGui::BeginDisabled(!svg);
+        ImGui::BeginDisabled(!is_svg);
         ImGui::Checkbox("plotter mode", &state.export_plotter_mode);
         ImGui::SameLine();
         ImGui::TextDisabled("(SVG only — single colour, no opacity, sorted)");
@@ -1950,6 +2017,26 @@ void render_preset_panel_content(AppState& state,
     }
     if (state.export_format == AppState::ExportFormat::Jpg) {
         ImGui::TextDisabled("JPEG has no alpha — the scene background fills it.");
+    }
+
+    // Plotter knobs — only shown when an actual plotter format is selected.
+    if (is_plotter) {
+        ImGui::Separator();
+        ImGui::TextDisabled("Plotter page (mm)");
+        slider_double_w("page width",  &state.plotter_page_width_mm,  50.0, 1000.0, 1.0, "%.0f mm");
+        slider_double_w("page height", &state.plotter_page_height_mm, 50.0, 1000.0, 1.0, "%.0f mm");
+        if (is_gcode) {
+            ImGui::TextDisabled("G-code Z heights + feedrates");
+            slider_double_w("pen up Z",     &state.plotter_pen_up_z,        -5.0,  20.0, 0.1, "%.1f mm");
+            slider_double_w("pen down Z",   &state.plotter_pen_down_z,      -5.0,   5.0, 0.1, "%.1f mm");
+            slider_double_w("travel feed",  &state.plotter_travel_feedrate, 100.0, 12000.0, 100.0, "%.0f mm/min");
+            slider_double_w("draw feed",    &state.plotter_draw_feedrate,   100.0, 12000.0, 100.0, "%.0f mm/min");
+            slider_double_w("plunge feed",  &state.plotter_plunge_feedrate, 100.0,  6000.0, 100.0, "%.0f mm/min");
+        }
+        if (is_hpgl) {
+            ImGui::TextDisabled("HPGL pen carousel");
+            slider_int_w("pen number", &state.plotter_pen_number, 1, 8);
+        }
     }
 
     if (ImGui::Button("Export…")) export_image_as(state, renderer);

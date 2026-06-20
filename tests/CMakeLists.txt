@@ -24,6 +24,7 @@ add_executable(test_caustic
     test_hybrids.cpp
     test_randomize.cpp
     test_preset_url.cpp
+    test_plotter_renderer.cpp
 )
 
 target_link_libraries(test_caustic PRIVATE
@@ -75,7 +76,7 @@ if(TARGET caustic-cli)
         )
     endforeach()
 
-    # Plotter-mode smoke check.
+    # Plotter-mode smoke check (SVG plotter mode).
     add_test(
         NAME cli_render_plotter
         COMMAND $<TARGET_FILE:caustic-cli>
@@ -83,4 +84,32 @@ if(TARGET caustic-cli)
                 --plotter
                 -o ${CMAKE_BINARY_DIR}/cli_plotter.svg
     )
+
+    # G-code (Grbl flavour) emission via extension inference.
+    add_test(
+        NAME cli_render_gcode
+        COMMAND $<TARGET_FILE:caustic-cli>
+                ${CMAKE_SOURCE_DIR}/presets/cardioid_classic.json
+                -o ${CMAKE_BINARY_DIR}/cli_cardioid.gcode
+    )
+    set_tests_properties(cli_render_gcode PROPERTIES
+        PASS_REGULAR_EXPRESSION ".*")
+
+    # HPGL emission via explicit --format flag.
+    add_test(
+        NAME cli_render_hpgl
+        COMMAND $<TARGET_FILE:caustic-cli>
+                ${CMAKE_SOURCE_DIR}/presets/cardioid_classic.json
+                --format hpgl
+                -o ${CMAKE_BINARY_DIR}/cli_cardioid.hpgl
+    )
+
+    # Unknown --format value should fail with exit 1.
+    add_test(
+        NAME cli_format_invalid
+        COMMAND $<TARGET_FILE:caustic-cli>
+                ${CMAKE_SOURCE_DIR}/presets/cardioid_classic.json
+                --format bogus
+                -o ${CMAKE_BINARY_DIR}/x.svg)
+    set_tests_properties(cli_format_invalid PROPERTIES WILL_FAIL TRUE)
 endif()

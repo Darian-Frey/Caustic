@@ -1,7 +1,9 @@
-# SVG renderer — always available, headless, no raylib dependency.
-# The CLI in Phase 7 links against this without pulling raylib in.
+# SVG renderer + plotter (G-code / HPGL) renderer — always available,
+# headless, no raylib dependency. The CLI in Phase 7 links against this
+# without pulling raylib in.
 add_library(caustic-render-svg STATIC
     svg_renderer.cpp
+    plotter_renderer.cpp
 )
 add_library(caustic::render-svg ALIAS caustic-render-svg)
 

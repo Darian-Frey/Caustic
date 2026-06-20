@@ -1,6 +1,6 @@
 # Caustic — User Manual
 
-> **Status:** v1.1 + Phase 13.1–13.2 — covers all features through v1.1 polish plus the "Surprise me" randomiser and shareable preset URLs
+> **Status:** v1.1 + Phase 13.1–13.3 — covers all features through v1.1 polish plus the "Surprise me" randomiser, shareable preset URLs, and direct G-code / HPGL plotter output
 > **Last reviewed:** 2026-06-20
 
 A practical guide to driving Caustic — what each control does, what each generator produces, and how to compose common string-art patterns.
@@ -331,10 +331,11 @@ If the clipboard text is empty, missing the `caustic:p1:` prefix, or fails to de
 
 In the Presets panel (right sidebar), the **Export** section has:
 
-- **format** — choose **SVG (vector)**, **PNG**, or **JPEG**
+- **format** — choose **SVG (vector)**, **PNG**, **JPEG**, **G-code (plotter)**, or **HPGL (plotter)**
 - **filename** — file basename, no extension (the dialog appends the right one)
-- **size** — pixel dimensions: width=height. For SVG it's the viewBox; for PNG/JPEG it's the rendered resolution
-- **plotter mode** — SVG-only (greyed out otherwise)
+- **size** — pixel dimensions: width=height. For SVG it's the viewBox; for PNG/JPEG it's the rendered resolution. Auto-hides for plotter formats (they fit-to-page in mm)
+- **plotter mode** — SVG-only checkbox (greyed out otherwise); the dedicated G-code / HPGL formats are separate from this
+- **plotter page + Z + feedrates** — only appears when G-code or HPGL is selected
 
 Click **Export…** (or press **`Ctrl+E`**) to open the native file picker. The filter and default extension follow the format choice.
 
@@ -354,6 +355,39 @@ Lossless raster with alpha. Internally Caustic temporarily resizes the live offs
 ### JPEG
 
 Lossy raster, **no alpha** — the scene background fills the image. Smaller files than PNG; ideal for sharing online. Same render-at-export-size pipeline as PNG.
+
+### G-code (pen plotter)
+
+Grbl-flavour G-code for pen plotters with a Z-axis pen lifter (the most common cheap-plotter setup, e.g. a 3D-printer chassis with a pen head). Header sets mm units, absolute coords, XY plane, units/min feed; footer returns to home and emits `M2`. Per path: `G0` rapid travel to the start point with pen up, `G1` plunge to **pen down Z**, `G1` draws to each subsequent point at the **draw feedrate**, `G0` raises to **pen up Z**.
+
+Knobs in the Export panel when G-code is selected:
+
+- **page width / page height** — the plotter bed dimensions in mm. Drawing fits inside with the standard 5% margin.
+- **pen up Z / pen down Z** — Z heights for travel vs. drawing. Defaults: 5 mm up, 0 mm down.
+- **travel feed / draw feed / plunge feed** — feedrates in mm/min. Defaults: 6000 / 3000 / 1500.
+
+Output is deterministic (`%.3f` mm precision). Scatter geometry from attractors is skipped — plotters can't draw a true zero-length point.
+
+### HPGL (vintage pen plotter)
+
+Standard HPGL: `IN;` init, `SP<n>;` pen-select, alternating `PU<x>,<y>;` (pen-up move) and `PD<x>,<y>,...;` (pen-down draw to each subsequent point on one statement) per path, `SP0;` + `IN;` footer. Coordinates are integer plotter units at the HP-standard **40 PU/mm**.
+
+Knobs:
+
+- **page width / page height** — the plotter bed dimensions in mm.
+- **pen number** — which slot in the pen carousel to select (default 1). Multi-pen support (one layer → one pen) is a future polish.
+
+### Headless plotter output
+
+The desktop GUI is convenient for one-offs but the CLI is the workflow tool — batch every preset in a folder, plug straight into Makefiles, etc. See the [Headless CLI](#headless-cli) section for the full flag table; the short version:
+
+```bash
+caustic-cli preset.json -o out.gcode                   # G-code (inferred from .gcode)
+caustic-cli preset.json -o out.hpgl                    # HPGL (inferred from .hpgl)
+caustic-cli preset.json --format gcode -o out.txt      # explicit format override
+caustic-cli preset.json --format gcode --page-width-mm 297 --page-height-mm 210 \
+    --pen-up-z 3 --pen-down-z 0 --draw-feedrate 2400 -o a4.gcode
+```
 
 ## Animation
 
@@ -384,22 +418,45 @@ The acceptance demo: modular chord with `k` animated `Linear(2 → 3)` over 60 f
 
 ## Headless CLI
 
-`caustic-cli` renders presets to SVG with no window — useful for batch jobs, CI, scripting.
+`caustic-cli` renders presets to SVG, G-code, or HPGL with no window — useful for batch jobs, CI, scripting.
 
 ```bash
 caustic-cli preset.json -o out.svg
 caustic-cli preset.json -o out.svg --width 2048 --height 2048 --margin 0.08 --plotter
+caustic-cli preset.json -o out.gcode                   # G-code (extension inferred)
+caustic-cli preset.json --format hpgl -o pattern.txt   # explicit format override
 ```
 
-Flags:
+Format selection — `--format` overrides; otherwise the output extension picks:
+
+| Extension | Format |
+|---|---|
+| `.svg` | SVG |
+| `.gcode` / `.nc` / `.gc` | G-code (Grbl flavour) |
+| `.hpgl` / `.plt` | HPGL |
+
+Flags by family:
 
 | Flag | Default | Notes |
 |---|---|---|
-| `--width N` | `1024` | Output canvas width |
-| `--height N` | `1024` | Output canvas height |
-| `--margin F` | `0.05` | Fraction of canvas reserved as margin |
-| `--plotter` | off | Plotter-mode export (see [Exporting](#exporting)) |
+| `--format FMT` | inferred | One of `svg`, `gcode`, `hpgl` |
+| `--margin F` | `0.05` | Margin as a fraction of page / canvas (all formats) |
+| **SVG only** | | |
+| `--width N` | `1024` | Output viewBox width |
+| `--height N` | `1024` | Output viewBox height |
+| `--plotter` | off | SVG plotter mode (single colour, no opacity, sorted) |
 | `--simplify E` | off | Douglas-Peucker epsilon (parsed; not yet applied) |
+| **G-code + HPGL** | | |
+| `--page-width-mm F` | `200` | Page / bed width in mm |
+| `--page-height-mm F` | `200` | Page / bed height in mm |
+| **G-code only** | | |
+| `--pen-up-z F` | `5.0` | Z height with pen lifted (mm) |
+| `--pen-down-z F` | `0.0` | Z height with pen touching (mm) |
+| `--travel-feedrate F` | `6000` | Rapid travel feedrate (mm/min) |
+| `--draw-feedrate F` | `3000` | Drawing feedrate (mm/min) |
+| `--plunge-feedrate F` | `1500` | Z-axis pen up/down feedrate (mm/min) |
+| **HPGL only** | | |
+| `--pen-number N` | `1` | Pen carousel slot to select |
 
 Exit codes: `0` success / `1` bad args / `2` preset file not found / `3` preset failed validation / `4` write failed.
 
