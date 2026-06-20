@@ -1,7 +1,7 @@
 # Caustic — User Manual
 
-> **Status:** v1.1 + Phase 13.1 — covers all features through v1.1 polish plus the "Surprise me" randomiser
-> **Last reviewed:** 2026-06-19
+> **Status:** v1.1 + Phase 13.1–13.2 — covers all features through v1.1 polish plus the "Surprise me" randomiser and shareable preset URLs
+> **Last reviewed:** 2026-06-20
 
 A practical guide to driving Caustic — what each control does, what each generator produces, and how to compose common string-art patterns.
 
@@ -317,6 +317,15 @@ Caustic ships with **27 bundled presets** covering every generator and several m
 - Editor grid (mode, spacing, polar spokes, visible, snap) — so CustomChord/LinearEnvelope work resumes exactly as you left it
 
 **Preset format** — versioned JSON (current schema is v2). v1 presets auto-promote on load. See [SPEC.md §3](SPEC.md) for the schema.
+
+### Sharing a preset via URL
+
+In the Presets panel next to **Open…**:
+
+- **Copy URL** — encodes the current preset as a single-line `caustic:p1:<base64url>` string and copies it to the system clipboard. The status bar reports the character count. Paste it into any chat, email, forum, or doc that survives ASCII; the bundled gallery encodes to roughly 0.9–5.6 KB per preset.
+- **Paste URL** — reads the clipboard. If the contents start with `caustic:p1:` it decodes the embedded preset and replaces the current scene. Whitespace at either end is tolerated, so copy-paste from chat clients (which often append newlines) works without manual trimming.
+
+If the clipboard text is empty, missing the `caustic:p1:` prefix, or fails to decode, your current preset stays put and the status bar tells you which step went wrong. No server, no scheme handler, no account — the URL **is** the preset, encoded compactly enough to share inline.
 
 ## Exporting
 
