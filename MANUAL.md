@@ -1,6 +1,6 @@
 # Caustic — User Manual
 
-> **Status:** v1.1 + Phase 13.1–13.4 — covers all features through v1.1 polish plus the "Surprise me" randomiser, shareable preset URLs, direct G-code / HPGL plotter output, and image trace → CustomChord
+> **Status:** v1.2 — covers all features through v1.1 polish + Phase 13 (Surprise-me randomiser, shareable preset URLs, direct G-code / HPGL plotter output, image trace → CustomChord, visual Keyframed timeline editor)
 > **Last reviewed:** 2026-06-20
 
 A practical guide to driving Caustic — what each control does, what each generator produces, and how to compose common string-art patterns.
@@ -425,9 +425,32 @@ Animate any single parameter over time and bake to a numbered frame sequence or 
 - `Static` — constant
 - `Linear` — `v0` at t=0 → `v1` at t=1
 - `Sine` — `offset + amplitude · sin(2π · frequency · t + phase)`
-- `Keyframed` — arbitrary `(t, value)` control points with linear interpolation between them. Add / remove rows from the table; values outside the first/last key clamp to the edges
+- `Keyframed` — arbitrary `(t, value)` control points with linear interpolation between them. Edited via the **visual timeline editor** (see below). Values outside the first / last key clamp to the edges.
 
 **Playback** — Play / Pause toggles live animation. The time slider scrubs (pauses playback when dragged). Duration sets how long one full sweep takes.
+
+### Visual timeline editor (Keyframed)
+
+When the envelope is set to `Keyframed`, the Animation panel shows a 2D curve view: time (`t`) on the x-axis, value on the y-axis in your chosen `[y_min, y_max]` range. Each key is a draggable circle; the piecewise-linear curve runs through them.
+
+Interactions:
+
+- **Left-click on a key + drag** — move it. The dragged key's `t` is clamped to `(prev.t + ε, next.t − ε)` so the sort order can't invert mid-drag.
+- **Left-click on empty canvas** — add a new key at the cursor position (snap-honoured) and immediately enter drag on it.
+- **Right-click on a key** — delete it. The editor won't drop below 2 keys (that would degenerate the envelope).
+- **Hover** — tooltip shows the exact `t` and `value`.
+
+Aux controls above the editor:
+
+- **y min / y max** — the visible Y range. Numbers outside the range are clipped at the bounds.
+- **snap to grid** — round `t` to multiples of 1/16 and value to 1/20 of the Y range as you drag.
+- **Auto-fit Y** — set `y_min` / `y_max` from the current key values with a 15% pad so they don't sit on the edge.
+- **Reset keys** — back to the default two-point `{(0, 0), (1, 1)}` shape.
+
+Visual cues:
+
+- **Vertical orange line** — the current animation `t` (the playback indicator). Scrub the time slider above and watch it move.
+- **Faded blue pre-roll / tail** — show the held-value clamp before the first key and after the last key, so you can see what the evaluator will return at `t < first` and `t > last`.
 
 ## Frame bake (video)
 

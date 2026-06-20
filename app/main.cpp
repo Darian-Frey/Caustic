@@ -361,6 +361,13 @@ struct AppState {
     double trace_modular_k      = 2.0;
     int    trace_nearest_k      = 2;
 
+    // Visual Keyframed-envelope timeline editor — UI-only state. The
+    // underlying Keyframed::keys stays a vector<pair<t, value>>; this
+    // controls how the 2D curve view displays it (Y axis range + snap).
+    double keyframed_y_min = -1.0;
+    double keyframed_y_max =  1.0;
+    bool   keyframed_snap  = false;
+
     // Undo/redo for the *current layer's* CustomChordParams only. Snapshot-
     // based: every atomic edit (add nail, add chord, delete, recolour, clear)
     // pushes the pre-edit state onto nail_undo_stack and clears nail_redo_stack.
@@ -1630,6 +1637,223 @@ int clean_intermediate_frames(const fs::path& dir, const std::string& name_prefi
     return removed;
 }
 
+// Visual editor for caustic::anim::Keyframed envelopes — replaces the
+// table-of-rows UI with a 2D curve view: time on x (0..1), value on y
+// (clamped to the user's chosen range). Click + drag a key to move it,
+// left-click on empty canvas to add a new key, right-click on a key to
+// delete it (won't drop below 2 keys — degenerate envelope guard). The
+// dragged key's t is clamped to (prev.t + eps, next.t - eps) so the
+// sort order stays valid mid-drag.
+//
+// Returns true when the envelope changed this frame, so the caller can
+// mark state.dirty.
+inline bool keyframed_timeline_editor(caustic::anim::Keyframed& kf,
+                                      double current_t,
+                                      double y_min, double y_max,
+                                      bool snap) {
+    if (y_max <= y_min) y_max = y_min + 1.0;
+    constexpr float kHeight    = 220.0f;
+    constexpr float kHitRadius =  10.0f;
+    constexpr float kKeyRadius =   6.0f;
+
+    ImGui::PushID("##keyframed_editor");
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float width  = ImGui::GetContentRegionAvail().x;
+    const ImVec2 size{std::max(120.0f, width), kHeight};
+
+    ImGui::InvisibleButton("##timeline_hit", size);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    const ImVec2 p0 = origin;
+    const ImVec2 p1 = {origin.x + size.x, origin.y + size.y};
+
+    // Coord helpers — world (t in [0,1], value in [y_min, y_max]) ↔ screen px.
+    auto t_to_x = [&](double t) {
+        return p0.x + static_cast<float>(t) * (p1.x - p0.x);
+    };
+    auto v_to_y = [&](double v) {
+        const double norm = (v - y_min) / (y_max - y_min);
+        return p1.y - static_cast<float>(norm) * (p1.y - p0.y);
+    };
+    auto x_to_t = [&](float x) {
+        return std::clamp(static_cast<double>(x - p0.x) /
+                          static_cast<double>(p1.x - p0.x), 0.0, 1.0);
+    };
+    auto y_to_v = [&](float y) {
+        return std::clamp(
+            y_max - static_cast<double>(y - p0.y) /
+                    static_cast<double>(p1.y - p0.y) * (y_max - y_min),
+            y_min, y_max);
+    };
+
+    auto maybe_snap = [&](double& t, double& v) {
+        if (!snap) return;
+        constexpr int    kTSteps = 16;
+        constexpr int    kVSteps = 20;
+        const double v_step = (y_max - y_min) / kVSteps;
+        t = std::round(t * kTSteps) / kTSteps;
+        if (v_step > 0.0) v = std::round(v / v_step) * v_step;
+        t = std::clamp(t, 0.0, 1.0);
+        v = std::clamp(v, y_min, y_max);
+    };
+
+    // ----- Background + grid -----
+    dl->AddRectFilled(p0, p1, IM_COL32( 24, 24, 30, 255), 3.0f);
+    // Vertical t-grid every 0.1 (or every 1/16 when snap is on).
+    const int v_lines = snap ? 16 : 10;
+    for (int i = 0; i <= v_lines; ++i) {
+        const float x = t_to_x(static_cast<double>(i) / v_lines);
+        dl->AddLine({x, p0.y}, {x, p1.y},
+                    (i == 0 || i == v_lines)
+                        ? IM_COL32(70, 70, 80, 255)
+                        : IM_COL32(40, 40, 48, 255));
+    }
+    // Horizontal value-grid — 6 lines including bounds, 0 line bolder.
+    for (int i = 0; i <= 6; ++i) {
+        const double v = y_min + (y_max - y_min) * i / 6.0;
+        const float  y = v_to_y(v);
+        const bool   zero_axis = (y_min <= 0.0 && y_max >= 0.0 &&
+                                  std::abs(v) < (y_max - y_min) * 0.02);
+        dl->AddLine({p0.x, y}, {p1.x, y},
+                    (i == 0 || i == 6)
+                        ? IM_COL32(70, 70, 80, 255)
+                        : (zero_axis ? IM_COL32(95, 95, 110, 255)
+                                     : IM_COL32(40, 40, 48, 255)));
+    }
+    // Zero line if not already drawn by the grid above.
+    if (y_min < 0.0 && y_max > 0.0) {
+        const float y0 = v_to_y(0.0);
+        dl->AddLine({p0.x, y0}, {p1.x, y0}, IM_COL32(110, 110, 130, 255), 1.5f);
+    }
+
+    // ----- Playback indicator -----
+    if (current_t >= 0.0 && current_t <= 1.0) {
+        const float cx = t_to_x(current_t);
+        dl->AddLine({cx, p0.y}, {cx, p1.y},
+                    IM_COL32(255, 200, 60, 220), 1.5f);
+    }
+
+    // ----- Curve segments (piecewise linear) -----
+    auto& keys = kf.keys;
+    if (keys.size() >= 2) {
+        const ImU32 line_col = IM_COL32(120, 200, 255, 240);
+        for (std::size_t i = 1; i < keys.size(); ++i) {
+            const ImVec2 a{t_to_x(keys[i - 1].first), v_to_y(keys[i - 1].second)};
+            const ImVec2 b{t_to_x(keys[i].first),     v_to_y(keys[i].second)};
+            dl->AddLine(a, b, line_col, 2.0f);
+        }
+        // Clamp segments before first key and after last key — the evaluator
+        // edge-clamps, draw the held value so the user sees it.
+        const ImVec2 head{t_to_x(0.0), v_to_y(keys.front().second)};
+        const ImVec2 head_join{t_to_x(keys.front().first), v_to_y(keys.front().second)};
+        dl->AddLine(head, head_join, IM_COL32(120, 200, 255, 120), 1.5f);
+        const ImVec2 tail{t_to_x(1.0), v_to_y(keys.back().second)};
+        const ImVec2 tail_join{t_to_x(keys.back().first), v_to_y(keys.back().second)};
+        dl->AddLine(tail_join, tail, IM_COL32(120, 200, 255, 120), 1.5f);
+    }
+
+    // ----- Hit test + drag state -----
+    static int   dragging = -1;
+    static int   hover    = -1;
+    static bool  dragged_this_press = false;
+    const ImVec2 mouse = ImGui::GetMousePos();
+
+    auto hit_key = [&]() {
+        int best = -1;
+        float best_d2 = kHitRadius * kHitRadius;
+        for (int i = 0; i < static_cast<int>(keys.size()); ++i) {
+            const float kx = t_to_x(keys[i].first);
+            const float ky = v_to_y(keys[i].second);
+            const float dx = mouse.x - kx;
+            const float dy = mouse.y - ky;
+            const float d2 = dx * dx + dy * dy;
+            if (d2 < best_d2) { best_d2 = d2; best = i; }
+        }
+        return best;
+    };
+
+    bool edited = false;
+    const bool inside = (mouse.x >= p0.x && mouse.x <= p1.x &&
+                         mouse.y >= p0.y && mouse.y <= p1.y);
+    hover = (ImGui::IsItemHovered() && dragging < 0) ? hit_key() : -1;
+
+    if (ImGui::IsItemActivated()) {
+        // Left-press: grab nearest key, or add a new one at click pos.
+        const int h = hit_key();
+        if (h >= 0) {
+            dragging = h;
+        } else if (inside) {
+            double t = x_to_t(mouse.x);
+            double v = y_to_v(mouse.y);
+            maybe_snap(t, v);
+            keys.push_back({t, v});
+            std::sort(keys.begin(), keys.end(),
+                      [](const auto& a, const auto& b) { return a.first < b.first; });
+            // Find the new key's index after sort and start dragging it.
+            for (int i = 0; i < static_cast<int>(keys.size()); ++i) {
+                if (keys[i].first == t && keys[i].second == v) { dragging = i; break; }
+            }
+            edited = true;
+        }
+        dragged_this_press = false;
+    }
+
+    if (ImGui::IsItemActive() && dragging >= 0 &&
+        dragging < static_cast<int>(keys.size())) {
+        double t = x_to_t(mouse.x);
+        double v = y_to_v(mouse.y);
+        maybe_snap(t, v);
+        // Keep the sort order intact mid-drag.
+        constexpr double kEps = 1e-4;
+        if (dragging > 0) t = std::max(t, keys[dragging - 1].first + kEps);
+        if (dragging + 1 < static_cast<int>(keys.size()))
+            t = std::min(t, keys[dragging + 1].first - kEps);
+        if (keys[dragging].first != t || keys[dragging].second != v) {
+            keys[dragging] = {t, v};
+            edited = true;
+            dragged_this_press = true;
+        }
+    }
+    if (ImGui::IsItemDeactivated()) {
+        dragging = -1;
+    }
+
+    // Right-click delete (won't go below 2 keys).
+    if (ImGui::IsItemHovered() &&
+        ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
+        keys.size() > 2) {
+        const int h = hit_key();
+        if (h >= 0) {
+            keys.erase(keys.begin() + h);
+            edited = true;
+        }
+    }
+
+    // ----- Draw key markers -----
+    for (int i = 0; i < static_cast<int>(keys.size()); ++i) {
+        const ImVec2 c{t_to_x(keys[i].first), v_to_y(keys[i].second)};
+        const bool is_dragged = (i == dragging);
+        const bool is_hover   = (i == hover);
+        const float r = (is_dragged || is_hover) ? kKeyRadius + 1.5f : kKeyRadius;
+        const ImU32 fill = is_dragged ? IM_COL32(255, 200, 60, 255)
+                         : is_hover   ? IM_COL32(180, 220, 255, 255)
+                                      : IM_COL32(120, 200, 255, 255);
+        dl->AddCircleFilled(c, r, fill);
+        dl->AddCircle(c, r, IM_COL32(20, 20, 24, 255), 0, 1.5f);
+    }
+
+    // ----- Tooltip for hovered/dragged key -----
+    if (hover >= 0 || dragging >= 0) {
+        const int i = (dragging >= 0) ? dragging : hover;
+        if (i >= 0 && i < static_cast<int>(keys.size())) {
+            ImGui::SetTooltip("t = %.3f\nvalue = %.3f", keys[i].first, keys[i].second);
+        }
+    }
+
+    ImGui::PopID();
+    return edited;
+}
+
 void render_animation_panel_content(AppState& state, caustic::RaylibRenderer& renderer) {
     auto& anim = state.animation;
 
@@ -1698,45 +1922,39 @@ void render_animation_panel_content(AppState& state, caustic::RaylibRenderer& re
         if (slider_double_w("phase",     &w->phase,       -std::numbers::pi, std::numbers::pi, 0.01)) state.dirty = true;
         if (slider_double_w("offset",    &w->offset,    -100.0, 100.0, 0.01)) state.dirty = true;
     } else if (auto* k = std::get_if<caustic::anim::Keyframed>(&anim.envelope)) {
-        // One row per keyframe: t slider + value slider + delete. After any
-        // edit, re-sort by t so the evaluator's bracket-find stays valid.
-        ImGui::TextDisabled("%d keyframes — interpolated linearly between adjacent points", static_cast<int>(k->keys.size()));
-        int delete_idx = -1;
-        bool edited = false;
-        for (int i = 0; i < static_cast<int>(k->keys.size()); ++i) {
-            ImGui::PushID(i);
-            ImGui::SetNextItemWidth(110);
-            if (slider_double_w("t",     &k->keys[i].first,  0.0, 1.0, 0.01, "%.3f")) { edited = true; state.dirty = true; }
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(110);
-            if (slider_double_w("value", &k->keys[i].second, -100.0, 100.0, 0.01))     { edited = true; state.dirty = true; }
-            ImGui::SameLine();
-            if (ImGui::SmallButton("x")) { delete_idx = i; }
-            ImGui::PopID();
-        }
-        if (delete_idx >= 0) {
-            k->keys.erase(k->keys.begin() + delete_idx);
-            state.dirty = true;
-        }
-        if (ImGui::Button("Add keyframe")) {
-            // Insert at the midpoint between the last two t values, or at
-            // (0.5, 0.0) if the list is empty.
-            double new_t = 0.5;
-            double new_v = 0.0;
-            if (k->keys.size() >= 2) {
-                new_t = (k->keys[k->keys.size() - 2].first + k->keys.back().first) * 0.5;
-                new_v = (k->keys[k->keys.size() - 2].second + k->keys.back().second) * 0.5;
-            } else if (k->keys.size() == 1) {
-                new_t = std::clamp(k->keys[0].first + 0.1, 0.0, 1.0);
-                new_v = k->keys[0].second;
+        ImGui::TextDisabled("%d keyframes — drag to move; left-click empty to add; right-click to delete",
+                            static_cast<int>(k->keys.size()));
+
+        // Y-axis range controls + snap. Auto-fit recomputes the range from
+        // the current keys (with a small pad so points don't sit on the edge).
+        slider_double_w("y min", &state.keyframed_y_min, -1000.0, 1000.0, 0.1, "%.2f");
+        slider_double_w("y max", &state.keyframed_y_max, -1000.0, 1000.0, 0.1, "%.2f");
+        ImGui::Checkbox("snap to grid", &state.keyframed_snap);
+        ImGui::SameLine();
+        if (ImGui::Button("Auto-fit Y")) {
+            if (!k->keys.empty()) {
+                double lo = k->keys.front().second;
+                double hi = k->keys.front().second;
+                for (const auto& kp : k->keys) {
+                    lo = std::min(lo, kp.second);
+                    hi = std::max(hi, kp.second);
+                }
+                const double pad = std::max(0.1, (hi - lo) * 0.15);
+                state.keyframed_y_min = lo - pad;
+                state.keyframed_y_max = hi + pad;
             }
-            k->keys.push_back({new_t, new_v});
-            edited = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Reset keys")) {
+            k->keys = {{0.0, 0.0}, {1.0, 1.0}};
             state.dirty = true;
         }
-        if (edited) {
-            std::sort(k->keys.begin(), k->keys.end(),
-                      [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        if (keyframed_timeline_editor(*k, anim.current_t,
+                                      state.keyframed_y_min,
+                                      state.keyframed_y_max,
+                                      state.keyframed_snap)) {
+            state.dirty = true;
         }
     }
 
